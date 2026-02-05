@@ -175,15 +175,15 @@ namespace ToolCheckCmt {
         }
 
         private void label3_Click(object sender, EventArgs e) {
-            throw new NotImplementedException();
+            //throw new NotImplementedException();
         }
 
         private void Label3_Click(object sender, EventArgs e) {
-            throw new NotImplementedException();
+            //throw new NotImplementedException();
         }
 
         private void dgvResult_CellContentClick(object sender, DataGridViewCellEventArgs e) {
-            throw new NotImplementedException();
+            //throw new NotImplementedException();
         }
 
         #endregion
