@@ -35,26 +35,29 @@ namespace ToolCheckCmt {
             this.btnCheck = new System.Windows.Forms.Button();
             this.btnExport = new System.Windows.Forms.Button();
             this.label2 = new System.Windows.Forms.Label();
-            this.label3 = new System.Windows.Forms.Label();
             this.rtbTokens = new System.Windows.Forms.RichTextBox();
-            this.rtbKiotKeys = new System.Windows.Forms.RichTextBox();
             ((System.ComponentModel.ISupportInitialize)(this.dgvResult)).BeginInit();
             this.SuspendLayout();
             // 
             // dgvResult
             // 
+            this.dgvResult.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.dgvResult.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dgvResult.Location = new System.Drawing.Point(396, 12);
+            this.dgvResult.Location = new System.Drawing.Point(445, 12);
             this.dgvResult.Name = "dgvResult";
-            this.dgvResult.Size = new System.Drawing.Size(359, 297);
+            this.dgvResult.Size = new System.Drawing.Size(343, 297);
             this.dgvResult.TabIndex = 0;
             this.dgvResult.CellContentClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dgvResult_CellContentClick);
             // 
             // txtLinks
             // 
+            this.txtLinks.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left)));
             this.txtLinks.Location = new System.Drawing.Point(49, 12);
             this.txtLinks.Name = "txtLinks";
-            this.txtLinks.Size = new System.Drawing.Size(326, 297);
+            this.txtLinks.Size = new System.Drawing.Size(390, 297);
             this.txtLinks.TabIndex = 1;
             this.txtLinks.Text = "";
             // 
@@ -69,6 +72,7 @@ namespace ToolCheckCmt {
             // 
             // lblLive
             // 
+            this.lblLive.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.lblLive.AutoSize = true;
             this.lblLive.Location = new System.Drawing.Point(492, 366);
             this.lblLive.Name = "lblLive";
@@ -78,6 +82,7 @@ namespace ToolCheckCmt {
             // 
             // lblStatus
             // 
+            this.lblStatus.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.lblStatus.AutoSize = true;
             this.lblStatus.Location = new System.Drawing.Point(684, 366);
             this.lblStatus.Name = "lblStatus";
@@ -87,6 +92,7 @@ namespace ToolCheckCmt {
             // 
             // lblDie
             // 
+            this.lblDie.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.lblDie.AutoSize = true;
             this.lblDie.Location = new System.Drawing.Point(581, 366);
             this.lblDie.Name = "lblDie";
@@ -96,6 +102,7 @@ namespace ToolCheckCmt {
             // 
             // btnCheck
             // 
+            this.btnCheck.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnCheck.Location = new System.Drawing.Point(529, 403);
             this.btnCheck.Name = "btnCheck";
             this.btnCheck.Size = new System.Drawing.Size(75, 23);
@@ -106,6 +113,7 @@ namespace ToolCheckCmt {
             // 
             // btnExport
             // 
+            this.btnExport.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnExport.Location = new System.Drawing.Point(646, 403);
             this.btnExport.Name = "btnExport";
             this.btnExport.Size = new System.Drawing.Size(75, 23);
@@ -116,6 +124,7 @@ namespace ToolCheckCmt {
             // 
             // label2
             // 
+            this.label2.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.label2.AutoSize = true;
             this.label2.Location = new System.Drawing.Point(5, 316);
             this.label2.Name = "label2";
@@ -123,40 +132,22 @@ namespace ToolCheckCmt {
             this.label2.TabIndex = 9;
             this.label2.Text = "Token";
             // 
-            // label3
-            // 
-            this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(10, 389);
-            this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(33, 13);
-            this.label3.TabIndex = 10;
-            this.label3.Text = "Proxy";
-            this.label3.Click += new System.EventHandler(this.label3_Click);
-            // 
             // rtbTokens
             // 
+            this.rtbTokens.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.rtbTokens.Location = new System.Drawing.Point(50, 327);
             this.rtbTokens.Name = "rtbTokens";
-            this.rtbTokens.Size = new System.Drawing.Size(325, 52);
+            this.rtbTokens.Size = new System.Drawing.Size(389, 99);
             this.rtbTokens.TabIndex = 11;
             this.rtbTokens.Text = "";
-            // 
-            // rtbKiotKeys
-            // 
-            this.rtbKiotKeys.Location = new System.Drawing.Point(49, 389);
-            this.rtbKiotKeys.Name = "rtbKiotKeys";
-            this.rtbKiotKeys.Size = new System.Drawing.Size(325, 52);
-            this.rtbKiotKeys.TabIndex = 12;
-            this.rtbKiotKeys.Text = "";
             // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.BackColor = System.Drawing.SystemColors.ControlLight;
             this.ClientSize = new System.Drawing.Size(800, 450);
-            this.Controls.Add(this.rtbKiotKeys);
             this.Controls.Add(this.rtbTokens);
-            this.Controls.Add(this.label3);
             this.Controls.Add(this.label2);
             this.Controls.Add(this.btnExport);
             this.Controls.Add(this.btnCheck);
@@ -167,7 +158,7 @@ namespace ToolCheckCmt {
             this.Controls.Add(this.txtLinks);
             this.Controls.Add(this.dgvResult);
             this.Name = "Form1";
-            this.Text = "Form1";
+            this.Text = "Tool Ren Link Comment";
             ((System.ComponentModel.ISupportInitialize)(this.dgvResult)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -197,9 +188,7 @@ namespace ToolCheckCmt {
         private System.Windows.Forms.Button btnCheck;
         private System.Windows.Forms.Button btnExport;
         private Label label2;
-        private Label label3;
         private RichTextBox rtbTokens;
-        private RichTextBox rtbKiotKeys;
     }
 }
 

@@ -2,7 +2,7 @@
 using Newtonsoft.Json.Linq;
 using OfficeOpenXml; // Cần NuGet: EPPlus
 using System;
-using System.Collections.Concurrent; // MỚI: Dùng cho hàng đợi đa luồng
+using System.Collections.Concurrent; // Dùng cho hàng đợi đa luồng
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -29,14 +29,18 @@ namespace ToolCheckCmt {
         private int _currentTokenIndex = 0;
         private object _tokenLock = new object();
 
-        // Queue và Timer để update UI mượt mà (Không dùng Invoke liên tục)
+        // Queue để update UI
         private ConcurrentQueue<ResultModel> _queueResult = new ConcurrentQueue<ResultModel>();
+
+        // [FIX] Thêm biến này để lưu trữ kết quả riêng biệt với UI -> Export không bao giờ thiếu
+        private ConcurrentBag<ResultModel> _fullResults = new ConcurrentBag<ResultModel>();
+
         private System.Windows.Forms.Timer _uiTimer;
 
         // File lưu cài đặt
         private const string SETTINGS_FILE = "last_session.json";
 
-        // Class phụ để lưu dữ liệu vào hàng đợi
+        // Class phụ để lưu dữ liệu
         private class ResultModel {
             public int STT { get; set; }
             public string ID { get; set; }
@@ -58,11 +62,11 @@ namespace ToolCheckCmt {
             if (handler.SupportsAutomaticDecompression) {
                 handler.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
             }
-            // Tắt xác thực SSL để chạy nhanh hơn và tránh lỗi SSL cũ
+            // Tắt xác thực SSL để chạy nhanh hơn
             handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
 
             var c = new HttpClient(handler);
-            c.Timeout = TimeSpan.FromSeconds(15); // Giảm timeout xuống để skip nhanh lỗi
+            c.Timeout = TimeSpan.FromSeconds(15);
             c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
             return c;
         }
@@ -72,7 +76,7 @@ namespace ToolCheckCmt {
 
             // --- TỐI ƯU KẾT NỐI MẠNG ---
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            ServicePointManager.DefaultConnectionLimit = 2000; // Cho phép mở 2000 kết nối đồng thời
+            ServicePointManager.DefaultConnectionLimit = 2000;
             ServicePointManager.Expect100Continue = false;
 
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
@@ -82,11 +86,34 @@ namespace ToolCheckCmt {
 
             // Đăng ký sự kiện đóng form để lưu dữ liệu
             this.FormClosing += Form1_FormClosing;
-
+            StyleDataGridView(dgvResult);
             // Tải dữ liệu cũ khi mở tool
             LoadSettings();
+            
         }
+        private void StyleDataGridView(DataGridView dgv) {
+            // 1. Cấu hình chung
+            dgv.BorderStyle = BorderStyle.None;
+            dgv.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(238, 239, 249); // Màu xen kẽ xám nhạt
+            dgv.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal; // Chỉ hiện đường kẻ ngang
+            dgv.DefaultCellStyle.SelectionBackColor = Color.DarkTurquoise; // Màu khi chọn dòng
+            dgv.DefaultCellStyle.SelectionForeColor = Color.WhiteSmoke;
+            dgv.BackgroundColor = Color.White; // Nền trắng thay vì xám
 
+            // 2. Chỉnh Header (Tiêu đề cột)
+            dgv.EnableHeadersVisualStyles = false; // Bắt buộc tắt cái này mới chỉnh màu được
+            dgv.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
+            dgv.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(20, 25, 72); // Màu xanh đậm
+            dgv.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+            dgv.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold); // Font đẹp hơn
+            dgv.ColumnHeadersHeight = 40; // Tiêu đề cao hơn cho thoáng
+
+            // 3. Chỉnh dòng dữ liệu
+            dgv.DefaultCellStyle.Font = new Font("Segoe UI", 10);
+            dgv.RowTemplate.Height = 30; // Dòng cao hơn, đỡ chi chít
+            dgv.RowHeadersVisible = false; // Ẩn cái cột mũi tên thừa bên trái cùng
+            dgv.AllowUserToResizeRows = false;
+        }
         private void SetupTimer() {
             _uiTimer = new System.Windows.Forms.Timer();
             _uiTimer.Interval = 500; // Cập nhật giao diện mỗi 0.5s
@@ -120,14 +147,13 @@ namespace ToolCheckCmt {
             if (_queueResult.IsEmpty) return;
 
             List<ResultModel> batch = new List<ResultModel>();
-            // Lấy tối đa 50 item mỗi lần tick để UI không bị đơ
+            // Lấy tối đa 100 item mỗi lần tick để UI không bị đơ
             while (_queueResult.TryDequeue(out var item)) {
                 batch.Add(item);
                 if (batch.Count >= 100) break;
             }
 
             if (batch.Count > 0) {
-                // Tắt vẽ tạm thời
                 dgvResult.SuspendLayout();
                 foreach (var item in batch) {
                     int idx = dgvResult.Rows.Add();
@@ -140,14 +166,14 @@ namespace ToolCheckCmt {
                     row.Cells["colLink"].Value = item.Link;
                     row.DefaultCellStyle.BackColor = item.Color;
                 }
-                dgvResult.ResumeLayout(); // Bật lại vẽ
+                dgvResult.ResumeLayout();
 
                 // Update Labels
                 lblLive.Text = $"Live: {_countLive}";
                 lblDie.Text = $"Die: {_countDie}";
                 lblStatus.Text = $"Đang chạy: {_totalProcessed}";
 
-                // Auto Scroll xuống dưới (nếu muốn nhanh hơn thì bỏ dòng này)
+                // Auto Scroll
                 if (dgvResult.RowCount > 0)
                     dgvResult.FirstDisplayedScrollingRowIndex = dgvResult.RowCount - 1;
             }
@@ -211,6 +237,9 @@ namespace ToolCheckCmt {
             // Xóa sạch hàng đợi cũ
             while (_queueResult.TryDequeue(out _)) { }
 
+            // [FIX] Reset list kết quả tổng
+            _fullResults = new ConcurrentBag<ResultModel>();
+
             btnCheck.Enabled = false;
             btnExport.Enabled = false;
 
@@ -222,7 +251,7 @@ namespace ToolCheckCmt {
 
             foreach (var url in listLinks) {
                 int currentSTT = sttCounter++;
-                await _semaphore.WaitAsync(); // Kiểm soát số luồng
+                await _semaphore.WaitAsync();
 
                 tasks.Add(Task.Run(async () => {
                     try {
@@ -257,7 +286,6 @@ namespace ToolCheckCmt {
             if (string.IsNullOrEmpty(cmtId)) {
                 status = "Lỗi ID";
             } else {
-                // Gọi API lấy thông tin (Thêm parent, from để lấy nhiều info hơn 1 lần)
                 string apiUrl = $"https://graph.facebook.com/v18.0/{cmtId}?fields=id,permalink_url,created_time,is_hidden,object{{created_time,id}},parent{{created_time,id}}&access_token={token}";
                 string jsonResponse = await GetApiContent(apiUrl);
 
@@ -271,16 +299,13 @@ namespace ToolCheckCmt {
                         DateTime? cmtDate = (DateTime?)json["created_time"];
                         DateTime? postDate = null;
 
-                        // 1. Lấy ngày Post từ object (nếu có)
                         if (json["object"] != null && json["object"]["created_time"] != null) {
                             postDate = (DateTime?)json["object"]["created_time"];
                         }
-                        // 2. Nếu không có, lấy ngày Post từ Parent (Nếu comment nằm trong comment khác hoặc post)
                         if (postDate == null && json["parent"] != null && json["parent"]["created_time"] != null) {
                             postDate = (DateTime?)json["parent"]["created_time"];
                         }
 
-                        // 3. Nếu vẫn không có, mới dùng logic tách ID gọi lại (Hạn chế gọi cái này để nhanh hơn)
                         if (postDate == null) {
                             string postId = "";
                             if (json["object"] != null && json["object"]["id"] != null) postId = json["object"]["id"].ToString();
@@ -325,7 +350,6 @@ namespace ToolCheckCmt {
 
             Interlocked.Increment(ref _totalProcessed);
 
-            // --- THAY VÌ INVOKE, TA ĐẨY VÀO QUEUE ---
             var resultItem = new ResultModel {
                 STT = stt,
                 ID = cmtId,
@@ -335,6 +359,9 @@ namespace ToolCheckCmt {
                 Link = url,
                 Color = rowColor
             };
+
+            // [FIX] Lưu vào cả 2 nơi: Kho tổng (để export) và Queue (để hiển thị)
+            _fullResults.Add(resultItem);
             _queueResult.Enqueue(resultItem);
         }
 
@@ -385,10 +412,12 @@ namespace ToolCheckCmt {
             } catch { return originalUrl; }
         }
 
+        // [FIX] Hàm Export lấy từ _fullResults thay vì DataGridView
         private void btnExport_Click(object sender, EventArgs e) {
-            if (_countLive == 0) { MessageBox.Show("Không có link LIVE hợp lệ!"); return; }
+            if (_fullResults.IsEmpty) { MessageBox.Show("Không có dữ liệu để xuất!"); return; }
+
             SaveFileDialog sfd = new SaveFileDialog();
-            sfd.FileName = $"List_Links_{DateTime.Now:HHmm}.xlsx";
+            sfd.FileName = $"ket_qua_comment_{DateTime.Now:HHmm}.xlsx";
             sfd.Filter = "Excel (*.xlsx)|*.xlsx";
 
             if (sfd.ShowDialog() == DialogResult.OK) {
@@ -397,15 +426,27 @@ namespace ToolCheckCmt {
                     using (var p = new ExcelPackage(new FileInfo(sfd.FileName))) {
                         var ws = p.Workbook.Worksheets.Add("Data");
                         ws.Cells[1, 1].Value = "Danh sách link";
+
                         int r = 2;
-                        foreach (DataGridViewRow row in dgvResult.Rows) {
-                            if (row.Cells["colStatus"].Value?.ToString() == "LIVE") {
-                                string link = CleanFacebookLink(row.Cells["colLink"].Value?.ToString());
-                                ws.Cells[r, 1].Value = link;
-                                r++;
-                            }
+                        // Lọc lấy Live và Sắp xếp lại theo STT
+                        var exportList = _fullResults
+                                        .Where(x => x.Status == "LIVE")
+                                        .OrderBy(x => x.STT)
+                                        .ToList();
+
+                        foreach (var item in exportList) {
+                            string link = CleanFacebookLink(item.Link);
+                            ws.Cells[r, 1].Value = link;
+                            r++;
                         }
+
                         ws.Column(1).Width = 50;
+
+                        // Kiểm tra nếu không có dòng nào được ghi
+                        if (r == 2) {
+                            MessageBox.Show("Tool chạy xong nhưng không tìm thấy Link LIVE nào để export!");
+                        }
+
                         p.Save();
                     }
                     System.Diagnostics.Process.Start(sfd.FileName);
