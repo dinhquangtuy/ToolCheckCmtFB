@@ -26,6 +26,7 @@ namespace ToolCheckCmt {
         /// the contents of this method with the code editor.
         /// </summary>
         private void InitializeComponent() {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
             this.dgvResult = new System.Windows.Forms.DataGridView();
             this.txtLinks = new System.Windows.Forms.RichTextBox();
             this.label1 = new System.Windows.Forms.Label();
@@ -45,9 +46,11 @@ namespace ToolCheckCmt {
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.dgvResult.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dgvResult.Location = new System.Drawing.Point(445, 12);
+            this.dgvResult.Location = new System.Drawing.Point(593, 15);
+            this.dgvResult.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
             this.dgvResult.Name = "dgvResult";
-            this.dgvResult.Size = new System.Drawing.Size(343, 297);
+            this.dgvResult.RowHeadersWidth = 51;
+            this.dgvResult.Size = new System.Drawing.Size(457, 366);
             this.dgvResult.TabIndex = 0;
             this.dgvResult.CellContentClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dgvResult_CellContentClick);
             // 
@@ -55,18 +58,20 @@ namespace ToolCheckCmt {
             // 
             this.txtLinks.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left)));
-            this.txtLinks.Location = new System.Drawing.Point(49, 12);
+            this.txtLinks.Location = new System.Drawing.Point(65, 15);
+            this.txtLinks.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
             this.txtLinks.Name = "txtLinks";
-            this.txtLinks.Size = new System.Drawing.Size(390, 297);
+            this.txtLinks.Size = new System.Drawing.Size(519, 365);
             this.txtLinks.TabIndex = 1;
             this.txtLinks.Text = "";
             // 
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(16, 9);
+            this.label1.Location = new System.Drawing.Point(21, 11);
+            this.label1.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(27, 13);
+            this.label1.Size = new System.Drawing.Size(31, 16);
             this.label1.TabIndex = 2;
             this.label1.Text = "Link";
             // 
@@ -74,9 +79,10 @@ namespace ToolCheckCmt {
             // 
             this.lblLive.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.lblLive.AutoSize = true;
-            this.lblLive.Location = new System.Drawing.Point(492, 366);
+            this.lblLive.Location = new System.Drawing.Point(656, 450);
+            this.lblLive.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblLive.Name = "lblLive";
-            this.lblLive.Size = new System.Drawing.Size(30, 13);
+            this.lblLive.Size = new System.Drawing.Size(37, 16);
             this.lblLive.TabIndex = 3;
             this.lblLive.Text = "Alive";
             // 
@@ -84,9 +90,10 @@ namespace ToolCheckCmt {
             // 
             this.lblStatus.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.lblStatus.AutoSize = true;
-            this.lblStatus.Location = new System.Drawing.Point(684, 366);
+            this.lblStatus.Location = new System.Drawing.Point(912, 450);
+            this.lblStatus.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblStatus.Name = "lblStatus";
-            this.lblStatus.Size = new System.Drawing.Size(37, 13);
+            this.lblStatus.Size = new System.Drawing.Size(44, 16);
             this.lblStatus.TabIndex = 4;
             this.lblStatus.Text = "Status";
             // 
@@ -94,18 +101,20 @@ namespace ToolCheckCmt {
             // 
             this.lblDie.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.lblDie.AutoSize = true;
-            this.lblDie.Location = new System.Drawing.Point(581, 366);
+            this.lblDie.Location = new System.Drawing.Point(775, 450);
+            this.lblDie.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.lblDie.Name = "lblDie";
-            this.lblDie.Size = new System.Drawing.Size(23, 13);
+            this.lblDie.Size = new System.Drawing.Size(28, 16);
             this.lblDie.TabIndex = 5;
             this.lblDie.Text = "Die";
             // 
             // btnCheck
             // 
             this.btnCheck.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnCheck.Location = new System.Drawing.Point(529, 403);
+            this.btnCheck.Location = new System.Drawing.Point(705, 496);
+            this.btnCheck.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
             this.btnCheck.Name = "btnCheck";
-            this.btnCheck.Size = new System.Drawing.Size(75, 23);
+            this.btnCheck.Size = new System.Drawing.Size(100, 28);
             this.btnCheck.TabIndex = 6;
             this.btnCheck.Text = "Start";
             this.btnCheck.UseVisualStyleBackColor = true;
@@ -114,9 +123,10 @@ namespace ToolCheckCmt {
             // btnExport
             // 
             this.btnExport.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnExport.Location = new System.Drawing.Point(646, 403);
+            this.btnExport.Location = new System.Drawing.Point(861, 496);
+            this.btnExport.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
             this.btnExport.Name = "btnExport";
-            this.btnExport.Size = new System.Drawing.Size(75, 23);
+            this.btnExport.Size = new System.Drawing.Size(100, 28);
             this.btnExport.TabIndex = 7;
             this.btnExport.Text = "Export";
             this.btnExport.UseVisualStyleBackColor = true;
@@ -126,27 +136,29 @@ namespace ToolCheckCmt {
             // 
             this.label2.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(5, 316);
+            this.label2.Location = new System.Drawing.Point(7, 389);
+            this.label2.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(38, 13);
+            this.label2.Size = new System.Drawing.Size(46, 16);
             this.label2.TabIndex = 9;
             this.label2.Text = "Token";
             // 
             // rtbTokens
             // 
             this.rtbTokens.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.rtbTokens.Location = new System.Drawing.Point(50, 327);
+            this.rtbTokens.Location = new System.Drawing.Point(67, 402);
+            this.rtbTokens.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
             this.rtbTokens.Name = "rtbTokens";
-            this.rtbTokens.Size = new System.Drawing.Size(389, 99);
+            this.rtbTokens.Size = new System.Drawing.Size(517, 121);
             this.rtbTokens.TabIndex = 11;
             this.rtbTokens.Text = "";
             // 
             // Form1
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
+            this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.ControlLight;
-            this.ClientSize = new System.Drawing.Size(800, 450);
+            this.ClientSize = new System.Drawing.Size(1067, 554);
             this.Controls.Add(this.rtbTokens);
             this.Controls.Add(this.label2);
             this.Controls.Add(this.btnExport);
@@ -157,6 +169,8 @@ namespace ToolCheckCmt {
             this.Controls.Add(this.label1);
             this.Controls.Add(this.txtLinks);
             this.Controls.Add(this.dgvResult);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
             this.Name = "Form1";
             this.Text = "Tool Ren Link Comment";
             ((System.ComponentModel.ISupportInitialize)(this.dgvResult)).EndInit();
