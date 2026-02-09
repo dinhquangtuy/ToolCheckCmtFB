@@ -7,6 +7,7 @@ E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\EPPlus.dll
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\EPPlus.Interfaces.dll
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\EPPlus.System.Drawing.dll
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\Microsoft.IO.RecyclableMemoryStream.dll
+E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\Newtonsoft.Json.dll
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\System.Buffers.dll
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\System.ComponentModel.Annotations.dll
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\System.Memory.dll
@@ -15,6 +16,7 @@ E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\System.Runtime.CompilerServices.
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\System.Security.Cryptography.Xml.dll
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\EPPlus.xml
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\Microsoft.IO.RecyclableMemoryStream.xml
+E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\Newtonsoft.Json.xml
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\System.Buffers.xml
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\System.Memory.xml
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\System.Numerics.Vectors.xml
@@ -32,5 +34,3 @@ E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.application
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolChec.E5A5EE75.Up2Date
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.exe
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.pdb
-E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\Newtonsoft.Json.dll
-E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\Newtonsoft.Json.xml

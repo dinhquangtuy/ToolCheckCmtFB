@@ -1,10 +1,11 @@
-﻿using Newtonsoft.Json; // Cần NuGet: Newtonsoft.Json
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using OfficeOpenXml; // Cần NuGet: EPPlus
+using OfficeOpenXml;
 using System;
-using System.Collections.Concurrent; // Dùng cho hàng đợi đa luồng
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D; // Cần thêm cái này để vẽ nút bo tròn
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -18,7 +19,7 @@ namespace ToolCheckCmt {
     public partial class Form1 : Form {
         // --- CẤU HÌNH TỐI ƯU ---
         private static readonly HttpClient client = CreateHttpClient();
-        private SemaphoreSlim _semaphore = new SemaphoreSlim(200); // Tăng lên 200 luồng
+        private SemaphoreSlim _semaphore = new SemaphoreSlim(200);
 
         // --- QUẢN LÝ DỮ LIỆU & UI ---
         private int _countLive = 0;
@@ -29,18 +30,12 @@ namespace ToolCheckCmt {
         private int _currentTokenIndex = 0;
         private object _tokenLock = new object();
 
-        // Queue để update UI
         private ConcurrentQueue<ResultModel> _queueResult = new ConcurrentQueue<ResultModel>();
-
-        // [FIX] Thêm biến này để lưu trữ kết quả riêng biệt với UI -> Export không bao giờ thiếu
         private ConcurrentBag<ResultModel> _fullResults = new ConcurrentBag<ResultModel>();
-
         private System.Windows.Forms.Timer _uiTimer;
-
-        // File lưu cài đặt
         private const string SETTINGS_FILE = "last_session.json";
 
-        // Class phụ để lưu dữ liệu
+        // Class phụ
         private class ResultModel {
             public int STT { get; set; }
             public string ID { get; set; }
@@ -51,7 +46,6 @@ namespace ToolCheckCmt {
             public Color Color { get; set; }
         }
 
-        // Class để lưu cài đặt (Token, Link cũ)
         public class AppSettings {
             public string LastTokens { get; set; }
             public string LastLinks { get; set; }
@@ -62,7 +56,6 @@ namespace ToolCheckCmt {
             if (handler.SupportsAutomaticDecompression) {
                 handler.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
             }
-            // Tắt xác thực SSL để chạy nhanh hơn
             handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
 
             var c = new HttpClient(handler);
@@ -74,49 +67,163 @@ namespace ToolCheckCmt {
         public Form1() {
             InitializeComponent();
 
-            // --- TỐI ƯU KẾT NỐI MẠNG ---
+            // --- TỐI ƯU MẠNG ---
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             ServicePointManager.DefaultConnectionLimit = 2000;
             ServicePointManager.Expect100Continue = false;
-
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
+            // --- SETUP CƠ BẢN ---
             SetupDataGridView();
             SetupTimer();
 
-            // Đăng ký sự kiện đóng form để lưu dữ liệu
+            // --- XỬ LÝ KÉO THẢ ---
+            txtLinks.AllowDrop = true;
+            txtLinks.DragEnter += txtLinks_DragEnter;
+            txtLinks.DragDrop += txtLinks_DragDrop;
+
+            // --- QUAN TRỌNG: LÀM ĐẸP & CO GIÃN CỬA SỔ ---
+            ApplyUI_And_Layout();
+
             this.FormClosing += Form1_FormClosing;
-            StyleDataGridView(dgvResult);
-            // Tải dữ liệu cũ khi mở tool
             LoadSettings();
-            
         }
-        private void StyleDataGridView(DataGridView dgv) {
-            // 1. Cấu hình chung
-            dgv.BorderStyle = BorderStyle.None;
-            dgv.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(238, 239, 249); // Màu xen kẽ xám nhạt
-            dgv.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal; // Chỉ hiện đường kẻ ngang
-            dgv.DefaultCellStyle.SelectionBackColor = Color.DarkTurquoise; // Màu khi chọn dòng
-            dgv.DefaultCellStyle.SelectionForeColor = Color.WhiteSmoke;
-            dgv.BackgroundColor = Color.White; // Nền trắng thay vì xám
 
-            // 2. Chỉnh Header (Tiêu đề cột)
-            dgv.EnableHeadersVisualStyles = false; // Bắt buộc tắt cái này mới chỉnh màu được
-            dgv.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
-            dgv.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(20, 25, 72); // Màu xanh đậm
-            dgv.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgv.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold); // Font đẹp hơn
-            dgv.ColumnHeadersHeight = 40; // Tiêu đề cao hơn cho thoáng
+        // ==========================================================
+        // KHU VỰC GIAO DIỆN & LAYOUT (MỚI)
+        // ==========================================================
+        private void ApplyUI_And_Layout() {
+            // 1. Cấu hình Form chính
+            this.BackColor = Color.FromArgb(245, 247, 251);
+            this.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
+            this.Text = "Tool Check Live/Die - Pro Version";
+            this.MinimumSize = new Size(900, 600);
 
-            // 3. Chỉnh dòng dữ liệu
-            dgv.DefaultCellStyle.Font = new Font("Segoe UI", 10);
-            dgv.RowTemplate.Height = 30; // Dòng cao hơn, đỡ chi chít
-            dgv.RowHeadersVisible = false; // Ẩn cái cột mũi tên thừa bên trái cùng
-            dgv.AllowUserToResizeRows = false;
+            // 2. Cấu hình DataGridView (Bảng kết quả)
+            dgvResult.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+
+            dgvResult.BackgroundColor = Color.White;
+            dgvResult.BorderStyle = BorderStyle.None;
+            dgvResult.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+            dgvResult.EnableHeadersVisualStyles = false;
+            dgvResult.GridColor = Color.FromArgb(230, 230, 230);
+
+            // Header Style
+            dgvResult.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(59, 130, 246);
+            dgvResult.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+            dgvResult.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            dgvResult.ColumnHeadersHeight = 45;
+
+            // Row Style
+            dgvResult.DefaultCellStyle.SelectionBackColor = Color.FromArgb(237, 242, 255);
+            dgvResult.DefaultCellStyle.SelectionForeColor = Color.FromArgb(59, 130, 246);
+            dgvResult.RowTemplate.Height = 35;
+
+            // --- 3. CẤU HÌNH Ô NHẬP LINK (QUAN TRỌNG: NGĂN XUỐNG DÒNG) ---
+            txtLinks.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+            txtLinks.BorderStyle = BorderStyle.FixedSingle;
+            txtLinks.BackColor = Color.White;
+
+            // ==> Cấu hình mới: Tắt tự động xuống dòng, hiện thanh cuộn ngang dọc
+            txtLinks.WordWrap = false;
+            txtLinks.ScrollBars = (RichTextBoxScrollBars)ScrollBars.Both;
+
+            // --- 4. CẤU HÌNH Ô NHẬP TOKEN (QUAN TRỌNG: NGĂN XUỐNG DÒNG) ---
+            rtbTokens.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            rtbTokens.BorderStyle = BorderStyle.FixedSingle;
+            rtbTokens.BackColor = Color.White;
+
+            // ==> Cấu hình mới: Tắt tự động xuống dòng
+            rtbTokens.WordWrap = false;
+            rtbTokens.ScrollBars = RichTextBoxScrollBars.Both; // RichTextBox dùng enum khác TextBox xíu
+
+            // 5. Cấu hình Nút bấm
+            StyleButton(btnCheck, Color.FromArgb(34, 197, 94)); // Xanh lá
+            btnCheck.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+
+            StyleButton(btnExport, Color.FromArgb(59, 130, 246)); // Xanh dương
+            btnExport.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+
+            // 6. Cấu hình Labels
+            lblLive.ForeColor = Color.FromArgb(34, 197, 94);
+            lblLive.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
+            lblLive.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+
+            lblDie.ForeColor = Color.FromArgb(239, 68, 68);
+            lblDie.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
+            lblDie.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+
+            lblStatus.ForeColor = Color.Gray;
+            lblStatus.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         }
+
+        private void StyleButton(Button btn, Color bgColor) {
+            btn.FlatStyle = FlatStyle.Flat;
+            btn.FlatAppearance.BorderSize = 0;
+            btn.BackColor = bgColor;
+            btn.ForeColor = Color.White;
+            btn.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btn.Cursor = Cursors.Hand;
+            btn.Size = new Size(120, 45); // Kích thước nút chuẩn
+        }
+
+        // ==========================================================
+        // LOGIC CHÍNH (GIỮ NGUYÊN)
+        // ==========================================================
+
+        private void txtLinks_DragEnter(object sender, DragEventArgs e) {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop)) {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                if (files.Length > 0) {
+                    string ext = Path.GetExtension(files[0]).ToLower();
+                    if (ext == ".txt" || ext == ".xlsx") {
+                        e.Effect = DragDropEffects.Copy;
+                        return;
+                    }
+                }
+            }
+            e.Effect = DragDropEffects.None;
+        }
+
+        private void txtLinks_DragDrop(object sender, DragEventArgs e) {
+            string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+            string filePath = files[0];
+            string ext = Path.GetExtension(filePath).ToLower();
+            List<string> loadedLinks = new List<string>();
+
+            try {
+                if (ext == ".txt") {
+                    loadedLinks = File.ReadAllLines(filePath)
+                   .Where(line => !string.IsNullOrWhiteSpace(line))
+                   .Select(line => line.Trim())
+                   .ToList();
+                } else if (ext == ".xlsx") {
+                    using (var package = new ExcelPackage(new FileInfo(filePath))) {
+                        var worksheet = package.Workbook.Worksheets.FirstOrDefault();
+                        if (worksheet != null && worksheet.Dimension != null) {
+                            int rowCount = worksheet.Dimension.Rows;
+                            for (int row = 1; row <= rowCount; row++) {
+                                string cellValue = worksheet.Cells[row, 1].Text;
+                                if (!string.IsNullOrWhiteSpace(cellValue)) {
+                                    loadedLinks.Add(cellValue.Trim());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (loadedLinks.Count > 0) {
+                    txtLinks.Text = string.Join(Environment.NewLine, loadedLinks);
+                    MessageBox.Show($"Đã nạp {loadedLinks.Count} link!", "Thành công");
+                }
+            } catch (Exception ex) {
+                MessageBox.Show("Lỗi: " + ex.Message);
+            }
+        }
+
         private void SetupTimer() {
             _uiTimer = new System.Windows.Forms.Timer();
-            _uiTimer.Interval = 500; // Cập nhật giao diện mỗi 0.5s
+            _uiTimer.Interval = 500;
             _uiTimer.Tick += _uiTimer_Tick;
         }
 
@@ -126,28 +233,24 @@ namespace ToolCheckCmt {
             dgvResult.Columns.Add("colID", "Comment ID");
             dgvResult.Columns.Add("colStatus", "Trạng Thái");
             dgvResult.Columns.Add("colType", "Chi Tiết");
-            dgvResult.Columns.Add("colDate", "Ngày Bài Gốc");
+            dgvResult.Columns.Add("colDate", "Ngày");
             dgvResult.Columns.Add("colLink", "Link Gốc");
 
-            dgvResult.Columns["colSTT"].Width = 40;
-            dgvResult.Columns["colID"].Width = 110;
-            dgvResult.Columns["colStatus"].Width = 80;
+            dgvResult.Columns["colSTT"].Width = 50;
+            dgvResult.Columns["colID"].Width = 120;
+            dgvResult.Columns["colStatus"].Width = 100;
             dgvResult.Columns["colType"].Width = 100;
-            dgvResult.Columns["colDate"].Width = 100;
-            dgvResult.Columns["colLink"].Width = 300;
+            dgvResult.Columns["colDate"].Width = 120;
+            dgvResult.Columns["colLink"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; // Cột Link tự giãn hết cỡ
 
-            // Bật double buffer cho DGV đỡ nháy
             typeof(DataGridView).InvokeMember("DoubleBuffered",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.SetProperty,
                 null, dgvResult, new object[] { true });
         }
 
-        // --- SỰ KIỆN TIMER: CẬP NHẬT UI TỪ QUEUE ---
         private void _uiTimer_Tick(object sender, EventArgs e) {
             if (_queueResult.IsEmpty) return;
-
             List<ResultModel> batch = new List<ResultModel>();
-            // Lấy tối đa 100 item mỗi lần tick để UI không bị đơ
             while (_queueResult.TryDequeue(out var item)) {
                 batch.Add(item);
                 if (batch.Count >= 100) break;
@@ -168,18 +271,15 @@ namespace ToolCheckCmt {
                 }
                 dgvResult.ResumeLayout();
 
-                // Update Labels
                 lblLive.Text = $"Live: {_countLive}";
                 lblDie.Text = $"Die: {_countDie}";
                 lblStatus.Text = $"Đang chạy: {_totalProcessed}";
 
-                // Auto Scroll
                 if (dgvResult.RowCount > 0)
                     dgvResult.FirstDisplayedScrollingRowIndex = dgvResult.RowCount - 1;
             }
         }
 
-        // --- LƯU VÀ TẢI CÀI ĐẶT ---
         private void Form1_FormClosing(object sender, FormClosingEventArgs e) {
             SaveSettings();
         }
@@ -229,21 +329,14 @@ namespace ToolCheckCmt {
             if (listLinks.Count == 0) { MessageBox.Show("Chưa nhập Link!"); return; }
             if (_listTokens.Count == 0) { MessageBox.Show("Chưa nhập Token!"); return; }
 
-            // Reset biến
             _countLive = 0; _countDie = 0; _totalProcessed = 0;
             _currentTokenIndex = 0;
             dgvResult.Rows.Clear();
-
-            // Xóa sạch hàng đợi cũ
             while (_queueResult.TryDequeue(out _)) { }
-
-            // [FIX] Reset list kết quả tổng
             _fullResults = new ConcurrentBag<ResultModel>();
 
             btnCheck.Enabled = false;
             btnExport.Enabled = false;
-
-            // Bắt đầu Timer cập nhật UI
             _uiTimer.Start();
 
             var tasks = new List<Task>();
@@ -264,11 +357,9 @@ namespace ToolCheckCmt {
             }
 
             await Task.WhenAll(tasks);
-
-            // Đợi Timer quét nốt những item cuối cùng
             await Task.Delay(1000);
             _uiTimer.Stop();
-            _uiTimer_Tick(null, null); // Quét lần cuối
+            _uiTimer_Tick(null, null);
 
             MessageBox.Show($"Hoàn tất!\nLive: {_countLive} - Die: {_countDie}");
             btnCheck.Enabled = true;
@@ -281,7 +372,6 @@ namespace ToolCheckCmt {
             string typeResult = "";
             string dateStr = "N/A";
             Color rowColor = Color.White;
-            bool isSuccess = false;
 
             if (string.IsNullOrEmpty(cmtId)) {
                 status = "Lỗi ID";
@@ -290,7 +380,6 @@ namespace ToolCheckCmt {
                 string jsonResponse = await GetApiContent(apiUrl);
 
                 if (jsonResponse.Contains("\"id\":")) {
-                    isSuccess = true;
                     try {
                         JObject json = JObject.Parse(jsonResponse);
                         string realLink = (string)json["permalink_url"] ?? "";
@@ -360,7 +449,6 @@ namespace ToolCheckCmt {
                 Color = rowColor
             };
 
-            // [FIX] Lưu vào cả 2 nơi: Kho tổng (để export) và Queue (để hiển thị)
             _fullResults.Add(resultItem);
             _queueResult.Enqueue(resultItem);
         }
@@ -412,9 +500,8 @@ namespace ToolCheckCmt {
             } catch { return originalUrl; }
         }
 
-        // [FIX] Hàm Export lấy từ _fullResults thay vì DataGridView
         private void btnExport_Click(object sender, EventArgs e) {
-            if (_fullResults.IsEmpty) { MessageBox.Show("Không có dữ liệu để xuất!"); return; }
+            if (_fullResults.IsEmpty) { MessageBox.Show("Không có dữ liệu!"); return; }
 
             SaveFileDialog sfd = new SaveFileDialog();
             sfd.FileName = $"ket_qua_comment_{DateTime.Now:HHmm}.xlsx";
@@ -425,33 +512,36 @@ namespace ToolCheckCmt {
                     if (File.Exists(sfd.FileName)) File.Delete(sfd.FileName);
                     using (var p = new ExcelPackage(new FileInfo(sfd.FileName))) {
                         var ws = p.Workbook.Worksheets.Add("Data");
-                        ws.Cells[1, 1].Value = "Danh sách link";
+                        ws.Cells[1, 1].Value = "Link";
 
                         int r = 2;
-                        // Lọc lấy Live và Sắp xếp lại theo STT
-                        var exportList = _fullResults
-                                        .Where(x => x.Status == "LIVE")
-                                        .OrderBy(x => x.STT)
-                                        .ToList();
+                        var exportList = _fullResults.Where(x => x.Status == "LIVE").OrderBy(x => x.STT).ToList();
 
                         foreach (var item in exportList) {
                             string link = CleanFacebookLink(item.Link);
                             ws.Cells[r, 1].Value = link;
                             r++;
                         }
-
                         ws.Column(1).Width = 50;
-
-                        // Kiểm tra nếu không có dòng nào được ghi
-                        if (r == 2) {
-                            MessageBox.Show("Tool chạy xong nhưng không tìm thấy Link LIVE nào để export!");
-                        }
-
                         p.Save();
                     }
                     System.Diagnostics.Process.Start(sfd.FileName);
                 } catch (Exception ex) { MessageBox.Show("Lỗi: " + ex.Message); }
             }
+        }
+    }
+
+    // --- CLASS NÚT BẤM BO TRÒN (Tùy chọn dùng nếu muốn thay thế Button thường) ---
+    public class RoundedButton : Button {
+        protected override void OnPaint(PaintEventArgs e) {
+            base.OnPaint(e);
+            Rectangle Rect = new Rectangle(0, 0, this.Width, this.Height);
+            GraphicsPath GraphPath = new GraphicsPath();
+            GraphPath.AddArc(Rect.X, Rect.Y, 15, 15, 180, 90);
+            GraphPath.AddArc(Rect.X + Rect.Width - 15, Rect.Y, 15, 15, 270, 90);
+            GraphPath.AddArc(Rect.X + Rect.Width - 15, Rect.Y + Rect.Height - 15, 15, 15, 0, 90);
+            GraphPath.AddArc(Rect.X, Rect.Y + Rect.Height - 15, 15, 15, 90, 90);
+            this.Region = new Region(GraphPath);
         }
     }
 }
