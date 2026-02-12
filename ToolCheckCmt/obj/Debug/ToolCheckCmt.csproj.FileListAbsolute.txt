@@ -25,7 +25,6 @@ E:\Code\API\ToolCheckCmt\ToolCheckCmt\bin\Debug\System.Security.Cryptography.Xml
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.csproj.AssemblyReference.cache
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.csproj.SuggestedBindingRedirects.cache
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.exe.config
-E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.Form1.resources
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.Properties.Resources.resources
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.csproj.GenerateResource.cache
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.csproj.CoreCompileInputs.cache
@@ -34,3 +33,4 @@ E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.application
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolChec.E5A5EE75.Up2Date
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.exe
 E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.pdb
+E:\Code\API\ToolCheckCmt\ToolCheckCmt\obj\Debug\ToolCheckCmt.Form1.resources

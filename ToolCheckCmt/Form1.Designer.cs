@@ -37,6 +37,8 @@ namespace ToolCheckCmt {
             this.rtbTokens = new System.Windows.Forms.RichTextBox();
             this.btnCheck = new ToolCheckCmt.RoundedButton();
             this.btnExport = new ToolCheckCmt.RoundedButton();
+            this.rtbProxies = new System.Windows.Forms.RichTextBox();
+            this.label3 = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.dgvResult)).BeginInit();
             this.SuspendLayout();
             // 
@@ -117,7 +119,7 @@ namespace ToolCheckCmt {
             this.rtbTokens.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.rtbTokens.Location = new System.Drawing.Point(50, 327);
             this.rtbTokens.Name = "rtbTokens";
-            this.rtbTokens.Size = new System.Drawing.Size(389, 99);
+            this.rtbTokens.Size = new System.Drawing.Size(389, 52);
             this.rtbTokens.TabIndex = 11;
             this.rtbTokens.Text = "";
             // 
@@ -141,12 +143,33 @@ namespace ToolCheckCmt {
             this.btnExport.UseVisualStyleBackColor = true;
             this.btnExport.Click += new System.EventHandler(this.btnExport_Click);
             // 
+            // rtbProxies
+            // 
+            this.rtbProxies.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.rtbProxies.Location = new System.Drawing.Point(50, 393);
+            this.rtbProxies.Name = "rtbProxies";
+            this.rtbProxies.Size = new System.Drawing.Size(389, 52);
+            this.rtbProxies.TabIndex = 14;
+            this.rtbProxies.Text = "";
+            // 
+            // label3
+            // 
+            this.label3.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.label3.AutoSize = true;
+            this.label3.Location = new System.Drawing.Point(5, 393);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(33, 13);
+            this.label3.TabIndex = 15;
+            this.label3.Text = "Proxy";
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.ControlLight;
             this.ClientSize = new System.Drawing.Size(800, 450);
+            this.Controls.Add(this.label3);
+            this.Controls.Add(this.rtbProxies);
             this.Controls.Add(this.btnExport);
             this.Controls.Add(this.btnCheck);
             this.Controls.Add(this.rtbTokens);
@@ -190,6 +213,8 @@ namespace ToolCheckCmt {
         private RichTextBox rtbTokens;
         private RoundedButton btnCheck;
         private RoundedButton btnExport;
+        private RichTextBox rtbProxies;
+        private Label label3;
     }
 }
 
