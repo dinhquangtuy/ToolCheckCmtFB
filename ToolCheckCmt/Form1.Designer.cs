@@ -51,7 +51,7 @@ namespace ToolCheckCmt {
             this.dgvResult.Location = new System.Drawing.Point(445, 12);
             this.dgvResult.Name = "dgvResult";
             this.dgvResult.RowHeadersWidth = 51;
-            this.dgvResult.Size = new System.Drawing.Size(343, 297);
+            this.dgvResult.Size = new System.Drawing.Size(355, 297);
             this.dgvResult.TabIndex = 0;
             this.dgvResult.CellContentClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dgvResult_CellContentClick);
             // 
@@ -78,7 +78,7 @@ namespace ToolCheckCmt {
             // 
             this.lblLive.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.lblLive.AutoSize = true;
-            this.lblLive.Location = new System.Drawing.Point(492, 366);
+            this.lblLive.Location = new System.Drawing.Point(504, 366);
             this.lblLive.Name = "lblLive";
             this.lblLive.Size = new System.Drawing.Size(30, 13);
             this.lblLive.TabIndex = 3;
@@ -88,7 +88,7 @@ namespace ToolCheckCmt {
             // 
             this.lblStatus.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.lblStatus.AutoSize = true;
-            this.lblStatus.Location = new System.Drawing.Point(684, 366);
+            this.lblStatus.Location = new System.Drawing.Point(696, 366);
             this.lblStatus.Name = "lblStatus";
             this.lblStatus.Size = new System.Drawing.Size(37, 13);
             this.lblStatus.TabIndex = 4;
@@ -98,7 +98,7 @@ namespace ToolCheckCmt {
             // 
             this.lblDie.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.lblDie.AutoSize = true;
-            this.lblDie.Location = new System.Drawing.Point(581, 366);
+            this.lblDie.Location = new System.Drawing.Point(593, 366);
             this.lblDie.Name = "lblDie";
             this.lblDie.Size = new System.Drawing.Size(23, 13);
             this.lblDie.TabIndex = 5;
@@ -167,7 +167,7 @@ namespace ToolCheckCmt {
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.ControlLight;
-            this.ClientSize = new System.Drawing.Size(800, 450);
+            this.ClientSize = new System.Drawing.Size(812, 450);
             this.Controls.Add(this.label3);
             this.Controls.Add(this.rtbProxies);
             this.Controls.Add(this.btnExport);

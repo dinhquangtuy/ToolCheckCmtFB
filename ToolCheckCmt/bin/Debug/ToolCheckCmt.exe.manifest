@@ -175,14 +175,14 @@
     </dependentAssembly>
   </dependency>
   <dependency>
-    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="ToolCheckCmt.exe" size="73152">
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="ToolCheckCmt.exe" size="70592">
       <assemblyIdentity name="ToolCheckCmt" version="1.0.0.0" language="neutral" processorArchitecture="msil" />
       <hash>
         <dsig:Transforms>
           <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
         </dsig:Transforms>
         <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-        <dsig:DigestValue>4AoVkhD/ux6Kowej86lvMd4PzvDZ9cMhVNyn477Wnug=</dsig:DigestValue>
+        <dsig:DigestValue>jI0TqIatPNNyliZIRF9/68hgS69si+xfPLoDXaOC2Aw=</dsig:DigestValue>
       </hash>
     </dependentAssembly>
   </dependency>

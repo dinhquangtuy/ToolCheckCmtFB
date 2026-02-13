@@ -19,7 +19,7 @@ namespace ToolCheckCmt {
     public partial class Form1 : Form {
         // --- CẤU HÌNH ---
         private static readonly HttpClient client = CreateHttpClient();
-        private SemaphoreSlim _semaphore = new SemaphoreSlim(200);
+        private SemaphoreSlim _semaphore = new SemaphoreSlim(30); // Giữ nguyên tốc độ của bạn
 
         // --- QUẢN LÝ DỮ LIỆU ---
         private int _countLive = 0;
@@ -32,17 +32,19 @@ namespace ToolCheckCmt {
 
         private ConcurrentQueue<ResultModel> _queueResult = new ConcurrentQueue<ResultModel>();
         private ConcurrentBag<ResultModel> _fullResults = new ConcurrentBag<ResultModel>();
+        // Bộ nhớ đệm: Lưu cặp ID -> Username để không phải request lại
+        private ConcurrentDictionary<string, string> _usernameCache = new ConcurrentDictionary<string, string>();
         private System.Windows.Forms.Timer _uiTimer;
         private const string SETTINGS_FILE = "last_session.json";
 
-        // Class kết quả
+        // Class Model
         private class ResultModel {
             public int STT { get; set; }
             public string ID { get; set; }
             public string Status { get; set; }
             public string Type { get; set; }
             public string Date { get; set; }
-            public string Link { get; set; }
+            public string Link { get; set; } // Đây sẽ là Link cuối cùng (Username nếu có)
             public Color Color { get; set; }
         }
 
@@ -59,7 +61,7 @@ namespace ToolCheckCmt {
             handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
 
             var c = new HttpClient(handler);
-            c.Timeout = TimeSpan.FromSeconds(15);
+            c.Timeout = TimeSpan.FromSeconds(20); // Tăng nhẹ timeout vì xử lý thêm bước Username
             c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
             return c;
         }
@@ -70,7 +72,7 @@ namespace ToolCheckCmt {
             ServicePointManager.DefaultConnectionLimit = 2000;
             ServicePointManager.Expect100Continue = false;
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-
+            //SetupBetterLayout();
             SetupDataGridView();
             SetupTimer();
 
@@ -85,13 +87,14 @@ namespace ToolCheckCmt {
             LoadSettings();
         }
 
-        // ==========================================================
-        // UI & UTILS
-        // ==========================================================
+        // Thêm hàm này vào trong class Form1
+        
+
+        // --- [CODE CŨ] GIỮ NGUYÊN PHẦN GIAO DIỆN ---
         private void ApplyUI_And_Layout() {
             this.BackColor = Color.FromArgb(245, 247, 251);
             this.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
-            this.Text = "Tool Check Live/Die - Pro Version";
+            this.Text = "Phần mềm RefineMeta"; // Đổi tên xíu cho ngầu
             this.MinimumSize = new Size(900, 600);
 
             dgvResult.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
@@ -100,10 +103,12 @@ namespace ToolCheckCmt {
             dgvResult.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
             dgvResult.EnableHeadersVisualStyles = false;
             dgvResult.GridColor = Color.FromArgb(230, 230, 230);
+
             dgvResult.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(59, 130, 246);
             dgvResult.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
             dgvResult.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             dgvResult.ColumnHeadersHeight = 45;
+
             dgvResult.DefaultCellStyle.SelectionBackColor = Color.FromArgb(237, 242, 255);
             dgvResult.DefaultCellStyle.SelectionForeColor = Color.FromArgb(59, 130, 246);
             dgvResult.RowTemplate.Height = 35;
@@ -129,9 +134,11 @@ namespace ToolCheckCmt {
             lblLive.ForeColor = Color.FromArgb(34, 197, 94);
             lblLive.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
             lblLive.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+
             lblDie.ForeColor = Color.FromArgb(239, 68, 68);
             lblDie.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
             lblDie.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+
             lblStatus.ForeColor = Color.Gray;
             lblStatus.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         }
@@ -165,9 +172,13 @@ namespace ToolCheckCmt {
             string filePath = files[0];
             string ext = Path.GetExtension(filePath).ToLower();
             List<string> loadedLinks = new List<string>();
+
             try {
                 if (ext == ".txt") {
-                    loadedLinks = File.ReadAllLines(filePath).Where(line => !string.IsNullOrWhiteSpace(line)).Select(line => line.Trim()).ToList();
+                    loadedLinks = File.ReadAllLines(filePath)
+                   .Where(line => !string.IsNullOrWhiteSpace(line))
+                   .Select(line => line.Trim())
+                   .ToList();
                 } else if (ext == ".xlsx") {
                     using (var package = new ExcelPackage(new FileInfo(filePath))) {
                         var worksheet = package.Workbook.Worksheets.FirstOrDefault();
@@ -175,16 +186,21 @@ namespace ToolCheckCmt {
                             int rowCount = worksheet.Dimension.Rows;
                             for (int row = 1; row <= rowCount; row++) {
                                 string cellValue = worksheet.Cells[row, 1].Text;
-                                if (!string.IsNullOrWhiteSpace(cellValue)) loadedLinks.Add(cellValue.Trim());
+                                if (!string.IsNullOrWhiteSpace(cellValue)) {
+                                    loadedLinks.Add(cellValue.Trim());
+                                }
                             }
                         }
                     }
                 }
+
                 if (loadedLinks.Count > 0) {
                     txtLinks.Text = string.Join(Environment.NewLine, loadedLinks);
                     MessageBox.Show($"Đã nạp {loadedLinks.Count} link!", "Thành công");
                 }
-            } catch (Exception ex) { MessageBox.Show("Lỗi: " + ex.Message); }
+            } catch (Exception ex) {
+                MessageBox.Show("Lỗi: " + ex.Message);
+            }
         }
 
         private void SetupTimer() {
@@ -200,14 +216,18 @@ namespace ToolCheckCmt {
             dgvResult.Columns.Add("colStatus", "Trạng Thái");
             dgvResult.Columns.Add("colType", "Chi Tiết");
             dgvResult.Columns.Add("colDate", "Ngày");
-            dgvResult.Columns.Add("colLink", "Link Gốc");
+            dgvResult.Columns.Add("colLink", "Link Cuối Cùng"); // Header mới
+
             dgvResult.Columns["colSTT"].Width = 50;
             dgvResult.Columns["colID"].Width = 120;
             dgvResult.Columns["colStatus"].Width = 100;
-            dgvResult.Columns["colType"].Width = 120;
+            dgvResult.Columns["colType"].Width = 100;
             dgvResult.Columns["colDate"].Width = 120;
             dgvResult.Columns["colLink"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-            typeof(DataGridView).InvokeMember("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.SetProperty, null, dgvResult, new object[] { true });
+
+            typeof(DataGridView).InvokeMember("DoubleBuffered",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.SetProperty,
+                null, dgvResult, new object[] { true });
         }
 
         private void _uiTimer_Tick(object sender, EventArgs e) {
@@ -217,6 +237,7 @@ namespace ToolCheckCmt {
                 batch.Add(item);
                 if (batch.Count >= 100) break;
             }
+
             if (batch.Count > 0) {
                 dgvResult.SuspendLayout();
                 foreach (var item in batch) {
@@ -231,274 +252,252 @@ namespace ToolCheckCmt {
                     row.DefaultCellStyle.BackColor = item.Color;
                 }
                 dgvResult.ResumeLayout();
+
                 lblLive.Text = $"Live: {_countLive}";
                 lblDie.Text = $"Die: {_countDie}";
                 lblStatus.Text = $"Đang chạy: {_totalProcessed}";
-                if (dgvResult.RowCount > 0) dgvResult.FirstDisplayedScrollingRowIndex = dgvResult.RowCount - 1;
+
+                if (dgvResult.RowCount > 0)
+                    dgvResult.FirstDisplayedScrollingRowIndex = dgvResult.RowCount - 1;
             }
         }
 
-        private void Form1_FormClosing(object sender, FormClosingEventArgs e) => SaveSettings();
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e) {
+            SaveSettings();
+        }
 
         private void SaveSettings() {
             try {
-                var settings = new AppSettings { LastTokens = rtbTokens.Text, LastLinks = txtLinks.Text };
-                File.WriteAllText(SETTINGS_FILE, JsonConvert.SerializeObject(settings, Formatting.Indented));
+                var settings = new AppSettings {
+                    LastTokens = rtbTokens.Text,
+                    LastLinks = txtLinks.Text
+                };
+                string json = JsonConvert.SerializeObject(settings, Formatting.Indented);
+                File.WriteAllText(SETTINGS_FILE, json);
             } catch { }
         }
 
         private void LoadSettings() {
             try {
                 if (File.Exists(SETTINGS_FILE)) {
-                    var settings = JsonConvert.DeserializeObject<AppSettings>(File.ReadAllText(SETTINGS_FILE));
-                    if (settings != null) { rtbTokens.Text = settings.LastTokens; txtLinks.Text = settings.LastLinks; }
+                    string json = File.ReadAllText(SETTINGS_FILE);
+                    var settings = JsonConvert.DeserializeObject<AppSettings>(json);
+                    if (settings != null) {
+                        rtbTokens.Text = settings.LastTokens;
+                        txtLinks.Text = settings.LastLinks;
+                    }
                 }
             } catch { }
         }
 
-        // ==========================================================
-        // TOKEN UTILS
-        // ==========================================================
-
-        private async Task<bool> CheckTokenLive(string token) {
-            try {
-                string url = $"https://graph.facebook.com/me?fields=id,name&access_token={token}";
-                using (var response = await client.GetAsync(url)) {
-                    if (!response.IsSuccessStatusCode) return false;
-                    string content = await response.Content.ReadAsStringAsync();
-                    if (content.Contains("\"error\"") || !content.Contains("\"id\"")) return false;
-                    return true;
-                }
-            } catch { return false; }
-        }
-
-        private void HandleTokenDie(string badToken) {
-            lock (_tokenLock) {
-                if (_listTokens.Contains(badToken)) {
-                    _listTokens.Remove(badToken);
-                }
-            }
-        }
-
         private string GetNextToken() {
             lock (_tokenLock) {
-                if (_listTokens.Count == 0) return null;
-                if (_currentTokenIndex >= _listTokens.Count) _currentTokenIndex = 0;
+                if (_listTokens.Count == 0) return "";
                 string token = _listTokens[_currentTokenIndex];
                 _currentTokenIndex++;
+                if (_currentTokenIndex >= _listTokens.Count) _currentTokenIndex = 0;
                 return token;
             }
         }
 
-        // ==========================================================
-        // LOGIC CHẠY CHÍNH
-        // ==========================================================
-
         private async void btnCheck_Click(object sender, EventArgs e) {
-            _listTokens = rtbTokens.Lines.Where(x => !string.IsNullOrWhiteSpace(x) && x.Length > 10).Select(x => x.Trim()).ToList();
-            var listLinks = txtLinks.Lines.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            var lines = rtbTokens.Lines.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToList();
+            if (lines.Count > 1) { MessageBox.Show("Chỉ được phép nhập DUY NHẤT 1 Token!", "Thông báo"); return; }
+            _listTokens = lines.Where(x => x.Length > 10).ToList();
 
+            var listLinks = txtLinks.Lines.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
             if (listLinks.Count == 0) { MessageBox.Show("Chưa nhập Link!"); return; }
             if (_listTokens.Count == 0) { MessageBox.Show("Chưa nhập Token!"); return; }
 
-            btnCheck.Enabled = false;
-            btnExport.Enabled = false;
-
-            // --- BƯỚC 1: LỌC TOKEN ĐẦU VÀO ---
-            lblStatus.Text = "Đang sàng lọc Token...";
-            List<string> liveTokens = new List<string>();
-            int checkedCount = 0;
-
-            using (var semToken = new SemaphoreSlim(20)) {
-                // SỬA LỖI Ở ĐÂY: Dùng foreach thông thường thay vì lambda expression
-                var tasks = new List<Task>();
-                foreach (var token in _listTokens) {
-                    tasks.Add(Task.Run(async () => {
-                        await semToken.WaitAsync();
-                        try {
-                            bool isLive = await CheckTokenLive(token);
-                            if (isLive) {
-                                lock (liveTokens) { liveTokens.Add(token); }
-                            }
-
-                            Interlocked.Increment(ref checkedCount);
-                            Invoke(new Action(() => {
-                                lblStatus.Text = $"Check Token: {checkedCount}/{_listTokens.Count} (Sống: {liveTokens.Count})";
-                            }));
-                        } finally {
-                            semToken.Release();
-                        }
-                    }));
-                }
-
-                await Task.WhenAll(tasks);
-            }
-
-            _listTokens = liveTokens;
-            rtbTokens.Text = string.Join(Environment.NewLine, _listTokens);
-
-            if (_listTokens.Count == 0) {
-                MessageBox.Show("Tất cả Token đều DIE/BLOCK! Không thể chạy.", "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                btnCheck.Enabled = true; btnExport.Enabled = true;
-                return;
-            }
-
-            // --- BƯỚC 2: CHẠY LINK ---
-            lblStatus.Text = "Đang check Link...";
             _countLive = 0; _countDie = 0; _totalProcessed = 0;
             _currentTokenIndex = 0;
             dgvResult.Rows.Clear();
             while (_queueResult.TryDequeue(out _)) { }
             _fullResults = new ConcurrentBag<ResultModel>();
 
+            btnCheck.Enabled = false;
+            btnExport.Enabled = false;
             _uiTimer.Start();
-            var linkTasks = new List<Task>(); // Đổi tên biến tránh trùng lặp
+
+            var tasks = new List<Task>();
             int sttCounter = 1;
 
             foreach (var url in listLinks) {
                 int currentSTT = sttCounter++;
                 await _semaphore.WaitAsync();
 
-                linkTasks.Add(Task.Run(async () => {
+                tasks.Add(Task.Run(async () => {
                     try {
-                        bool processedSuccess = false;
-
-                        while (!processedSuccess) {
-                            string tokenToUse = GetNextToken();
-
-                            if (string.IsNullOrEmpty(tokenToUse)) {
-                                var resultItem = new ResultModel {
-                                    STT = currentSTT,
-                                    Link = url,
-                                    Status = "ERROR",
-                                    Type = "Hết Token",
-                                    Color = Color.Gray
-                                };
-                                AddToResultQueue(resultItem);
-                                break;
-                            }
-
-                            processedSuccess = await ProcessLinkWithToken(url.Trim(), tokenToUse, currentSTT);
-                        }
-
+                        string tokenToUse = GetNextToken();
+                        await ProcessLinkWithToken(url.Trim(), tokenToUse, currentSTT);
                     } finally {
                         _semaphore.Release();
                     }
                 }));
             }
 
-            await Task.WhenAll(linkTasks);
+            await Task.WhenAll(tasks);
             await Task.Delay(1000);
             _uiTimer.Stop();
             _uiTimer_Tick(null, null);
 
             MessageBox.Show($"Hoàn tất!\nLive: {_countLive} - Die: {_countDie}");
-            lblStatus.Text = "Hoàn tất.";
             btnCheck.Enabled = true;
             btnExport.Enabled = true;
         }
 
-        private async Task<bool> ProcessLinkWithToken(string url, string token, int stt) {
+        // ==========================================================
+        // KHU VỰC XỬ LÝ LOGIC CHÍNH (ĐÃ ĐƯỢC GỘP)
+        // ==========================================================
+        private async Task ProcessLinkWithToken(string url, string token, int stt) {
             string cmtId = ExtractCommentId(url);
+            string status = "ERROR";
+            string typeResult = "";
+            string dateStr = "N/A";
+            Color rowColor = Color.White;
+            string finalLink = url; // Link kết quả cuối cùng
 
             if (string.IsNullOrEmpty(cmtId)) {
-                AddToResultQueue(new ResultModel { STT = stt, ID = "", Status = "Lỗi ID", Type = "Sai Format", Date = "N/A", Link = url, Color = Color.Orange });
-                return true;
-            }
+                status = "Lỗi ID";
+            } else {
+                // Bước 1: Check Live/Die và lấy Link ID chuẩn
+                string apiUrl = $"https://graph.facebook.com/v18.0/{cmtId}?fields=id,permalink_url,created_time,is_hidden,object{{created_time,id}},parent{{created_time,id}}&access_token={token}";
+                string jsonResponse = await GetApiContent(apiUrl);
 
-            string apiUrl = $"https://graph.facebook.com/v18.0/{cmtId}?fields=id,permalink_url,created_time,is_hidden,object{{created_time,id}},parent{{created_time,id}}&access_token={token}";
+                if (jsonResponse.Contains("\"id\":")) {
+                    try {
+                        JObject json = JObject.Parse(jsonResponse);
+                        string realLink = (string)json["permalink_url"] ?? "";
+                        finalLink = realLink; // Gán tạm link chuẩn ID
 
-            try {
-                using (var response = await client.GetAsync(apiUrl)) {
+                        bool isHidden = (bool?)json["is_hidden"] ?? false;
+                        DateTime? cmtDate = (DateTime?)json["created_time"];
+                        DateTime? postDate = null;
 
-                    if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden) {
-                        HandleTokenDie(token);
-                        return false;
-                    }
-
-                    if (response.StatusCode == HttpStatusCode.BadRequest) {
-                        string errorContent = await response.Content.ReadAsStringAsync();
-                        bool isTokenError =
-                            errorContent.Contains("OAuth") ||
-                            errorContent.Contains("access token") ||
-                            errorContent.Contains("\"code\":190") ||
-                            errorContent.Contains("checkpoint") ||
-                            errorContent.Contains("restricted") ||
-                            errorContent.Contains("blocked");
-
-                        if (isTokenError) {
-                            HandleTokenDie(token);
-                            return false;
+                        // Logic lấy ngày tháng (giữ nguyên)
+                        if (json["object"] != null && json["object"]["created_time"] != null) {
+                            postDate = (DateTime?)json["object"]["created_time"];
+                        }
+                        if (postDate == null && json["parent"] != null && json["parent"]["created_time"] != null) {
+                            postDate = (DateTime?)json["parent"]["created_time"];
                         }
 
-                        AddToResultQueue(new ResultModel { STT = stt, ID = cmtId, Status = "Lỗi Link", Type = "Sai ID/Format", Date = "N/A", Link = url, Color = Color.Orange });
-                        return true;
-                    }
+                        // Nếu không có ngày post, thử fetch thêm 1 lần nữa (giữ nguyên logic cũ)
+                        if (postDate == null) {
+                            string postId = "";
+                            if (json["object"] != null && json["object"]["id"] != null) postId = json["object"]["id"].ToString();
+                            if (string.IsNullOrEmpty(postId) && !string.IsNullOrEmpty(realLink)) postId = ExtractPostIdFromLink(realLink);
 
-                    if (response.IsSuccessStatusCode) {
-                        string jsonResponse = await response.Content.ReadAsStringAsync();
-                        ResultModel res = new ResultModel { STT = stt, ID = cmtId, Link = url };
+                            if (!string.IsNullOrEmpty(postId)) {
+                                string postApiUrl = $"https://graph.facebook.com/v18.0/{postId}?fields=created_time&access_token={token}";
+                                string postJson = await GetApiContent(postApiUrl);
+                                try {
+                                    JObject pJson = JObject.Parse(postJson);
+                                    if (pJson["created_time"] != null) postDate = (DateTime?)pJson["created_time"];
+                                } catch { }
+                            }
+                        }
 
-                        if (jsonResponse.Contains("\"id\":")) {
-                            try {
-                                JObject json = JObject.Parse(jsonResponse);
-                                string realLink = (string)json["permalink_url"] ?? "";
-                                bool isHidden = (bool?)json["is_hidden"] ?? false;
-                                DateTime? cmtDate = (DateTime?)json["created_time"];
-                                DateTime? postDate = null;
+                        DateTime? targetDate = postDate ?? cmtDate;
+                        dateStr = targetDate.HasValue ? targetDate.Value.ToString("dd/MM/yyyy") : "N/A";
+                        double daysDiff = targetDate.HasValue ? (DateTime.Now - targetDate.Value).TotalDays : 9999;
 
-                                if (json["object"] != null && json["object"]["created_time"] != null) postDate = (DateTime?)json["object"]["created_time"];
-                                if (postDate == null && json["parent"] != null && json["parent"]["created_time"] != null) postDate = (DateTime?)json["parent"]["created_time"];
+                        // --- PHÂN LOẠI TRẠNG THÁI ---
+                        if (isHidden) {
+                            status = "DIE"; typeResult = "Bị Ẩn"; rowColor = Color.Salmon;
+                            Interlocked.Increment(ref _countDie);
+                        } else if (realLink.Contains("/reel/")) {
+                            status = "DIE"; typeResult = "Reel"; rowColor = Color.Salmon;
+                            Interlocked.Increment(ref _countDie);
+                        } else if (daysDiff > 27) {
+                            status = "DIE"; typeResult = "Bài Cũ"; rowColor = Color.Salmon;
+                            Interlocked.Increment(ref _countDie);
+                        } else {
+                            // !!! TÌNH HUỐNG LIVE -> CHẠY TIẾP LOGIC LẤY USERNAME Ở ĐÂY !!!
+                            status = "LIVE";
+                            typeResult = postDate != null ? "OK (Post)" : "OK (Cmt)";
+                            rowColor = Color.LightGreen;
+                            Interlocked.Increment(ref _countLive);
 
-                                if (postDate == null) {
-                                    string postId = "";
-                                    if (json["object"] != null && json["object"]["id"] != null) postId = json["object"]["id"].ToString();
-                                    if (string.IsNullOrEmpty(postId) && !string.IsNullOrEmpty(realLink)) postId = ExtractPostIdFromLink(realLink);
-                                    if (!string.IsNullOrEmpty(postId)) {
-                                        try {
-                                            string postApi = $"https://graph.facebook.com/v18.0/{postId}?fields=created_time&access_token={token}";
-                                            string pJsonStr = await (await client.GetAsync(postApi)).Content.ReadAsStringAsync();
-                                            JObject pJson = JObject.Parse(pJsonStr);
-                                            if (pJson["created_time"] != null) postDate = (DateTime?)pJson["created_time"];
-                                        } catch { }
+                            // --- [TỐI ƯU] LOGIC LẤY USERNAME CÓ CACHE ---
+                            string pageId = ExtractPageIdFromLink(realLink);
+                            if (!string.IsNullOrEmpty(pageId)) {
+                                string username = "";
+
+                                // 1. Kiểm tra xem ID này đã từng lấy chưa?
+                                if (_usernameCache.ContainsKey(pageId)) {
+                                    username = _usernameCache[pageId]; // Lấy từ bộ nhớ ra (Không tốn request)
+                                } else {
+                                    // 2. Nếu chưa có thì mới gọi API
+                                    username = await GetUsernameFromApi(pageId, token);
+
+                                    // 3. Lấy xong thì lưu vào bộ nhớ để lần sau dùng
+                                    if (!string.IsNullOrEmpty(username)) {
+                                        _usernameCache.TryAdd(pageId, username);
                                     }
                                 }
 
-                                DateTime? targetDate = postDate ?? cmtDate;
-                                res.Date = targetDate.HasValue ? targetDate.Value.ToString("dd/MM/yyyy") : "N/A";
-
-                                if (isHidden) {
-                                    res.Status = "DIE"; res.Type = "Bị Ẩn"; res.Color = Color.Salmon;
-                                    Interlocked.Increment(ref _countDie);
-                                } else {
-                                    res.Status = "LIVE"; res.Type = postDate != null ? "OK (Post)" : "OK (Cmt)"; res.Color = Color.LightGreen;
-                                    Interlocked.Increment(ref _countLive);
+                                // 4. Thay thế vào Link
+                                if (!string.IsNullOrEmpty(username)) {
+                                    finalLink = realLink.Replace(pageId, username);
+                                    typeResult += " + User";
                                 }
-                            } catch {
-                                res.Status = "Lỗi JSON"; res.Type = "Parse Error"; res.Color = Color.Salmon;
                             }
-                        } else {
-                            res.Status = "DIE"; res.Type = "Content Rỗng"; res.Color = Color.Salmon;
-                            Interlocked.Increment(ref _countDie);
+                            // --------------------------------------------------------
                         }
 
-                        AddToResultQueue(res);
-                        return true;
-                    }
-
-                    AddToResultQueue(new ResultModel { STT = stt, ID = cmtId, Status = "DIE", Type = $"HTTP {response.StatusCode}", Date = "N/A", Link = url, Color = Color.Salmon });
+                    } catch { status = "Lỗi JSON"; }
+                } else {
+                    status = "DIE"; typeResult = "Die Token/Xóa"; rowColor = Color.Salmon;
                     Interlocked.Increment(ref _countDie);
-                    return true;
                 }
-            } catch {
-                return false;
             }
+
+            Interlocked.Increment(ref _totalProcessed);
+
+            var resultItem = new ResultModel {
+                STT = stt,
+                ID = cmtId,
+                Status = status,
+                Type = typeResult,
+                Date = dateStr,
+                Link = finalLink, // Link này đã qua xử lý (ID -> Username nếu có thể)
+                Color = rowColor
+            };
+
+            _fullResults.Add(resultItem);
+            _queueResult.Enqueue(resultItem);
         }
 
-        private void AddToResultQueue(ResultModel item) {
-            Interlocked.Increment(ref _totalProcessed);
-            _fullResults.Add(item);
-            _queueResult.Enqueue(item);
+        // --- HÀM MỚI: LẤY USERNAME TỪ API (PORT TỪ TOOL 2 SANG) ---
+        private async Task<string> GetUsernameFromApi(string pageId, string token) {
+            try {
+                string apiUrl = $"https://graph.facebook.com/{pageId}?fields=username&access_token={token}";
+                string jsonString = await GetApiContent(apiUrl);
+                if (!string.IsNullOrEmpty(jsonString)) {
+                    JObject json = JObject.Parse(jsonString);
+                    if (json["username"] != null) {
+                        return json["username"].ToString();
+                    }
+                }
+            } catch { }
+            return null; // Trả về null nếu lỗi hoặc không có username
+        }
+
+        // --- HÀM MỚI: TÁCH PAGE ID TỪ LINK CHUẨN ---
+        private string ExtractPageIdFromLink(string url) {
+            // Regex bắt dạng: facebook.com/123456789/
+            var match = Regex.Match(url, @"facebook\.com\/(\d+)");
+            if (match.Success) return match.Groups[1].Value;
+            return null;
+        }
+
+        private async Task<string> GetApiContent(string apiUrl) {
+            try {
+                using (var response = await client.GetAsync(apiUrl)) {
+                    return await response.Content.ReadAsStringAsync();
+                }
+            } catch { return ""; }
         }
 
         private string ExtractCommentId(string url) {
@@ -512,36 +511,45 @@ namespace ToolCheckCmt {
 
         private string ExtractPostIdFromLink(string url) {
             try {
-                var matchPfbid = Regex.Match(url, @"(pfbid[a-zA-Z0-9]+)");
-                if (matchPfbid.Success) return matchPfbid.Groups[1].Value;
                 var matchFbid = Regex.Match(url, @"story_fbid=([0-9]+)");
                 if (matchFbid.Success) return matchFbid.Groups[1].Value;
-                var matchPost = Regex.Match(url, @"\/posts\/([a-zA-Z0-9]+)");
+                var matchPost = Regex.Match(url, @"\/posts\/([0-9]+)");
                 if (matchPost.Success) return matchPost.Groups[1].Value;
                 var matchVideo = Regex.Match(url, @"\/videos\/([0-9]+)");
                 if (matchVideo.Success) return matchVideo.Groups[1].Value;
                 var matchPhoto = Regex.Match(url, @"\/photos\/[a-zA-Z0-9\.]+\/([0-9]+)");
                 if (matchPhoto.Success) return matchPhoto.Groups[1].Value;
                 var matchEnd = Regex.Match(url, @"\/([0-9]+)\/?(?:\?|$)");
-                if (matchEnd.Success && matchEnd.Groups[1].Value.Length > 8) return matchEnd.Groups[1].Value;
+                if (matchEnd.Success && matchEnd.Groups[1].Value.Length > 10) return matchEnd.Groups[1].Value;
             } catch { }
             return "";
         }
 
+        private string CleanFacebookLink(string originalUrl) {
+            // Hàm này vẫn giữ để dùng cho nút Export nếu cần
+            return originalUrl;
+        }
+
         private void btnExport_Click(object sender, EventArgs e) {
             if (_fullResults.IsEmpty) { MessageBox.Show("Không có dữ liệu!"); return; }
+
             SaveFileDialog sfd = new SaveFileDialog();
-            sfd.FileName = $"ket_qua_comment_{DateTime.Now:HHmm}.xlsx";
+            sfd.FileName = $"ket_qua_live_{DateTime.Now:HHmm}.xlsx";
             sfd.Filter = "Excel (*.xlsx)|*.xlsx";
+
             if (sfd.ShowDialog() == DialogResult.OK) {
                 try {
                     if (File.Exists(sfd.FileName)) File.Delete(sfd.FileName);
                     using (var p = new ExcelPackage(new FileInfo(sfd.FileName))) {
                         var ws = p.Workbook.Worksheets.Add("Data");
                         ws.Cells[1, 1].Value = "Link";
+
                         int r = 2;
+                        // Chỉ xuất những con LIVE
                         var exportList = _fullResults.Where(x => x.Status == "LIVE").OrderBy(x => x.STT).ToList();
+
                         foreach (var item in exportList) {
+                            // item.Link bây giờ đã là Link Username (nếu convert thành công) hoặc Link ID
                             ws.Cells[r, 1].Value = item.Link;
                             r++;
                         }
@@ -556,9 +564,10 @@ namespace ToolCheckCmt {
         private void AutoCreateShortcut() {
             try {
                 string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                string shortcutName = "Tool Check CMT.lnk";
+                string shortcutName = "RefineMeta.lnk";
                 string shortcutPath = Path.Combine(desktopPath, shortcutName);
                 string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
+
                 if (!System.IO.File.Exists(shortcutPath)) {
                     Type shellType = Type.GetTypeFromProgID("WScript.Shell");
                     dynamic shell = Activator.CreateInstance(shellType);
@@ -566,14 +575,14 @@ namespace ToolCheckCmt {
                     shortcut.TargetPath = exePath;
                     shortcut.WorkingDirectory = Path.GetDirectoryName(exePath);
                     shortcut.WindowStyle = 1;
-                    shortcut.Description = "Tool Check Live/Die Facebook";
+                    shortcut.Description = "Tool Check Live + Username";
                     shortcut.IconLocation = exePath + ",0";
                     shortcut.Save();
                 }
             } catch { }
         }
     }
-    // --- CLASS NÚT BẤM BO TRÒN (Tùy chọn dùng nếu muốn thay thế Button thường) ---
+
     public class RoundedButton : Button {
         protected override void OnPaint(PaintEventArgs e) {
             base.OnPaint(e);
