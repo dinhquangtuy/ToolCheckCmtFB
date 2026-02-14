@@ -19,7 +19,7 @@ namespace ToolCheckCmt {
     public partial class Form1 : Form {
         // --- CẤU HÌNH ---
         private static readonly HttpClient client = CreateHttpClient();
-        private SemaphoreSlim _semaphore = new SemaphoreSlim(30); // Giữ nguyên tốc độ của bạn
+        private SemaphoreSlim _semaphore = new SemaphoreSlim(30);
 
         // --- QUẢN LÝ DỮ LIỆU ---
         private int _countLive = 0;
@@ -44,7 +44,7 @@ namespace ToolCheckCmt {
             public string Status { get; set; }
             public string Type { get; set; }
             public string Date { get; set; }
-            public string Link { get; set; } // Đây sẽ là Link cuối cùng (Username nếu có)
+            public string Link { get; set; }
             public Color Color { get; set; }
         }
 
@@ -61,7 +61,7 @@ namespace ToolCheckCmt {
             handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
 
             var c = new HttpClient(handler);
-            c.Timeout = TimeSpan.FromSeconds(20); // Tăng nhẹ timeout vì xử lý thêm bước Username
+            c.Timeout = TimeSpan.FromSeconds(20);
             c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
             return c;
         }
@@ -72,7 +72,7 @@ namespace ToolCheckCmt {
             ServicePointManager.DefaultConnectionLimit = 2000;
             ServicePointManager.Expect100Continue = false;
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-            //SetupBetterLayout();
+
             SetupDataGridView();
             SetupTimer();
 
@@ -87,14 +87,13 @@ namespace ToolCheckCmt {
             LoadSettings();
         }
 
-        // Thêm hàm này vào trong class Form1
-        
-
-        // --- [CODE CŨ] GIỮ NGUYÊN PHẦN GIAO DIỆN ---
+        // ==========================================
+        // KHU VỰC GIAO DIỆN & SETTINGS
+        // ==========================================
         private void ApplyUI_And_Layout() {
             this.BackColor = Color.FromArgb(245, 247, 251);
             this.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
-            this.Text = "Phần mềm RefineMeta"; // Đổi tên xíu cho ngầu
+            this.Text = "Phần mềm RefineMeta";
             this.MinimumSize = new Size(900, 600);
 
             dgvResult.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
@@ -216,7 +215,7 @@ namespace ToolCheckCmt {
             dgvResult.Columns.Add("colStatus", "Trạng Thái");
             dgvResult.Columns.Add("colType", "Chi Tiết");
             dgvResult.Columns.Add("colDate", "Ngày");
-            dgvResult.Columns.Add("colLink", "Link Cuối Cùng"); // Header mới
+            dgvResult.Columns.Add("colLink", "Link Cuối Cùng");
 
             dgvResult.Columns["colSTT"].Width = 50;
             dgvResult.Columns["colID"].Width = 120;
@@ -290,6 +289,9 @@ namespace ToolCheckCmt {
             } catch { }
         }
 
+        // ==========================================
+        // KHU VỰC QUẢN LÝ TOKEN
+        // ==========================================
         private string GetNextToken() {
             lock (_tokenLock) {
                 if (_listTokens.Count == 0) return "";
@@ -300,10 +302,40 @@ namespace ToolCheckCmt {
             }
         }
 
+        private void RemoveDeadToken(string token) {
+            lock (_tokenLock) {
+                if (_listTokens.Contains(token)) {
+                    _listTokens.Remove(token);
+                    if (_listTokens.Count > 0 && _currentTokenIndex >= _listTokens.Count) {
+                        _currentTokenIndex = 0;
+                    }
+                }
+            }
+        }
+
+        private bool IsTokenError(string jsonResponse) {
+            if (string.IsNullOrEmpty(jsonResponse)) return false;
+            if (!jsonResponse.Contains("\"error\"")) return false;
+
+            try {
+                JObject json = JObject.Parse(jsonResponse);
+                if (json["error"] != null) {
+                    int code = (int?)json["error"]["code"] ?? 0;
+                    // 190: Token die/hết hạn | 4, 17, 32, 613: Rate Limit
+                    if (code == 190 || code == 4 || code == 17 || code == 32 || code == 613) {
+                        return true;
+                    }
+                }
+            } catch { }
+            return false;
+        }
+
+        // ==========================================
+        // KHU VỰC XỬ LÝ CHÍNH
+        // ==========================================
         private async void btnCheck_Click(object sender, EventArgs e) {
             var lines = rtbTokens.Lines.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToList();
-            if (lines.Count > 1) { MessageBox.Show("Chỉ được phép nhập DUY NHẤT 1 Token!", "Thông báo"); return; }
-            _listTokens = lines.Where(x => x.Length > 10).ToList();
+            _listTokens = lines.Where(x => x.Length > 10).Distinct().ToList();
 
             var listLinks = txtLinks.Lines.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
             if (listLinks.Count == 0) { MessageBox.Show("Chưa nhập Link!"); return; }
@@ -328,8 +360,7 @@ namespace ToolCheckCmt {
 
                 tasks.Add(Task.Run(async () => {
                     try {
-                        string tokenToUse = GetNextToken();
-                        await ProcessLinkWithToken(url.Trim(), tokenToUse, currentSTT);
+                        await ProcessLinkWithToken(url.Trim(), currentSTT);
                     } finally {
                         _semaphore.Release();
                     }
@@ -341,115 +372,147 @@ namespace ToolCheckCmt {
             _uiTimer.Stop();
             _uiTimer_Tick(null, null);
 
-            MessageBox.Show($"Hoàn tất!\nLive: {_countLive} - Die: {_countDie}");
+            MessageBox.Show($"Hoàn tất!\nLive: {_countLive} - Die: {_countDie}\nCòn lại {_listTokens.Count} Token sống.", "Thông báo");
+
+            // Tự cập nhật lại danh sách token sống vào giao diện
+            rtbTokens.Text = string.Join(Environment.NewLine, _listTokens);
+
             btnCheck.Enabled = true;
             btnExport.Enabled = true;
         }
 
-        // ==========================================================
-        // KHU VỰC XỬ LÝ LOGIC CHÍNH (ĐÃ ĐƯỢC GỘP)
-        // ==========================================================
-        private async Task ProcessLinkWithToken(string url, string token, int stt) {
+        private async Task ProcessLinkWithToken(string url, int stt) {
             string cmtId = ExtractCommentId(url);
             string status = "ERROR";
             string typeResult = "";
             string dateStr = "N/A";
             Color rowColor = Color.White;
-            string finalLink = url; // Link kết quả cuối cùng
+            string finalLink = url;
 
             if (string.IsNullOrEmpty(cmtId)) {
                 status = "Lỗi ID";
             } else {
-                // Bước 1: Check Live/Die và lấy Link ID chuẩn
-                string apiUrl = $"https://graph.facebook.com/v18.0/{cmtId}?fields=id,permalink_url,created_time,is_hidden,object{{created_time,id}},parent{{created_time,id}}&access_token={token}";
-                string jsonResponse = await GetApiContent(apiUrl);
+                bool isSuccess = false;
 
-                if (jsonResponse.Contains("\"id\":")) {
-                    try {
-                        JObject json = JObject.Parse(jsonResponse);
-                        string realLink = (string)json["permalink_url"] ?? "";
-                        finalLink = realLink; // Gán tạm link chuẩn ID
+                // Vòng lặp xoay Token: Nếu token lỗi, tự vứt token cũ đi, bốc token mới và lặp lại link này
+                while (!isSuccess) {
+                    string currentToken = GetNextToken();
+                    if (string.IsNullOrEmpty(currentToken)) {
+                        status = "HẾT TOKEN";
+                        typeResult = "All Tokens Dead";
+                        rowColor = Color.Red;
+                        break;
+                    }
 
-                        bool isHidden = (bool?)json["is_hidden"] ?? false;
-                        DateTime? cmtDate = (DateTime?)json["created_time"];
-                        DateTime? postDate = null;
+                    string apiUrl = $"https://graph.facebook.com/v18.0/{cmtId}?fields=id,permalink_url,created_time,is_hidden,object{{created_time,id}},parent{{created_time,id}}&access_token={currentToken}";
+                    string jsonResponse = await GetApiContent(apiUrl);
 
-                        // Logic lấy ngày tháng (giữ nguyên)
-                        if (json["object"] != null && json["object"]["created_time"] != null) {
-                            postDate = (DateTime?)json["object"]["created_time"];
-                        }
-                        if (postDate == null && json["parent"] != null && json["parent"]["created_time"] != null) {
-                            postDate = (DateTime?)json["parent"]["created_time"];
-                        }
+                    // XỬ LÝ NẾU TOKEN DIE / RATE LIMIT
+                    if (IsTokenError(jsonResponse)) {
+                        RemoveDeadToken(currentToken);
+                        continue;
+                    }
 
-                        // Nếu không có ngày post, thử fetch thêm 1 lần nữa (giữ nguyên logic cũ)
-                        if (postDate == null) {
-                            string postId = "";
-                            if (json["object"] != null && json["object"]["id"] != null) postId = json["object"]["id"].ToString();
-                            if (string.IsNullOrEmpty(postId) && !string.IsNullOrEmpty(realLink)) postId = ExtractPostIdFromLink(realLink);
+                    if (jsonResponse.Contains("\"id\":")) {
+                        try {
+                            JObject json = JObject.Parse(jsonResponse);
+                            string realLink = (string)json["permalink_url"] ?? "";
+                            finalLink = realLink;
 
-                            if (!string.IsNullOrEmpty(postId)) {
-                                string postApiUrl = $"https://graph.facebook.com/v18.0/{postId}?fields=created_time&access_token={token}";
-                                string postJson = await GetApiContent(postApiUrl);
-                                try {
-                                    JObject pJson = JObject.Parse(postJson);
-                                    if (pJson["created_time"] != null) postDate = (DateTime?)pJson["created_time"];
-                                } catch { }
+                            bool isHidden = (bool?)json["is_hidden"] ?? false;
+                            DateTime? cmtDate = (DateTime?)json["created_time"];
+                            DateTime? postDate = null;
+
+                            if (json["object"] != null && json["object"]["created_time"] != null) {
+                                postDate = (DateTime?)json["object"]["created_time"];
                             }
-                        }
+                            if (postDate == null && json["parent"] != null && json["parent"]["created_time"] != null) {
+                                postDate = (DateTime?)json["parent"]["created_time"];
+                            }
 
-                        DateTime? targetDate = postDate ?? cmtDate;
-                        dateStr = targetDate.HasValue ? targetDate.Value.ToString("dd/MM/yyyy") : "N/A";
-                        double daysDiff = targetDate.HasValue ? (DateTime.Now - targetDate.Value).TotalDays : 9999;
+                            if (postDate == null) {
+                                string postId = "";
+                                if (json["object"] != null && json["object"]["id"] != null) postId = json["object"]["id"].ToString();
+                                if (string.IsNullOrEmpty(postId) && !string.IsNullOrEmpty(realLink)) postId = ExtractPostIdFromLink(realLink);
 
-                        // --- PHÂN LOẠI TRẠNG THÁI ---
-                        if (isHidden) {
-                            status = "DIE"; typeResult = "Bị Ẩn"; rowColor = Color.Salmon;
-                            Interlocked.Increment(ref _countDie);
-                        } else if (realLink.Contains("/reel/")) {
-                            status = "DIE"; typeResult = "Reel"; rowColor = Color.Salmon;
-                            Interlocked.Increment(ref _countDie);
-                        } else if (daysDiff > 27) {
-                            status = "DIE"; typeResult = "Bài Cũ"; rowColor = Color.Salmon;
-                            Interlocked.Increment(ref _countDie);
-                        } else {
-                            // !!! TÌNH HUỐNG LIVE -> CHẠY TIẾP LOGIC LẤY USERNAME Ở ĐÂY !!!
-                            status = "LIVE";
-                            typeResult = postDate != null ? "OK (Post)" : "OK (Cmt)";
-                            rowColor = Color.LightGreen;
-                            Interlocked.Increment(ref _countLive);
+                                if (!string.IsNullOrEmpty(postId)) {
+                                    string postApiUrl = $"https://graph.facebook.com/v18.0/{postId}?fields=created_time&access_token={currentToken}";
+                                    string postJson = await GetApiContent(postApiUrl);
 
-                            // --- [TỐI ƯU] LOGIC LẤY USERNAME CÓ CACHE ---
-                            string pageId = ExtractPageIdFromLink(realLink);
-                            if (!string.IsNullOrEmpty(pageId)) {
-                                string username = "";
+                                    if (IsTokenError(postJson)) {
+                                        RemoveDeadToken(currentToken);
+                                        continue;
+                                    }
 
-                                // 1. Kiểm tra xem ID này đã từng lấy chưa?
-                                if (_usernameCache.ContainsKey(pageId)) {
-                                    username = _usernameCache[pageId]; // Lấy từ bộ nhớ ra (Không tốn request)
-                                } else {
-                                    // 2. Nếu chưa có thì mới gọi API
-                                    username = await GetUsernameFromApi(pageId, token);
+                                    try {
+                                        JObject pJson = JObject.Parse(postJson);
+                                        if (pJson["created_time"] != null) postDate = (DateTime?)pJson["created_time"];
+                                    } catch { }
+                                }
+                            }
 
-                                    // 3. Lấy xong thì lưu vào bộ nhớ để lần sau dùng
+                            DateTime? targetDate = postDate ?? cmtDate;
+                            dateStr = targetDate.HasValue ? targetDate.Value.ToString("dd/MM/yyyy") : "N/A";
+                            double daysDiff = targetDate.HasValue ? (DateTime.Now - targetDate.Value).TotalDays : 9999;
+
+                            if (isHidden) {
+                                status = "DIE"; typeResult = "Bị Ẩn"; rowColor = Color.Salmon;
+                                Interlocked.Increment(ref _countDie);
+                            } else if (realLink.Contains("/reel/")) {
+                                status = "DIE"; typeResult = "Reel"; rowColor = Color.Salmon;
+                                Interlocked.Increment(ref _countDie);
+                            } else if (daysDiff > 27) {
+                                status = "DIE"; typeResult = "Bài Cũ"; rowColor = Color.Salmon;
+                                Interlocked.Increment(ref _countDie);
+                            } else {
+                                status = "LIVE";
+                                typeResult = postDate != null ? "OK (Post)" : "OK (Cmt)";
+                                rowColor = Color.LightGreen;
+                                Interlocked.Increment(ref _countLive);
+
+                                string pageId = ExtractPageIdFromLink(realLink);
+                                if (!string.IsNullOrEmpty(pageId)) {
+                                    string username = "";
+
+                                    if (_usernameCache.ContainsKey(pageId)) {
+                                        username = _usernameCache[pageId];
+                                    } else {
+                                        string userApiUrl = $"https://graph.facebook.com/{pageId}?fields=username&access_token={currentToken}";
+                                        string userJson = await GetApiContent(userApiUrl);
+
+                                        if (IsTokenError(userJson)) {
+                                            RemoveDeadToken(currentToken);
+                                            Interlocked.Decrement(ref _countLive);
+                                            continue;
+                                        }
+
+                                        if (!string.IsNullOrEmpty(userJson)) {
+                                            try {
+                                                JObject uJson = JObject.Parse(userJson);
+                                                if (uJson["username"] != null) {
+                                                    username = uJson["username"].ToString();
+                                                    _usernameCache.TryAdd(pageId, username);
+                                                }
+                                            } catch { }
+                                        }
+                                    }
+
                                     if (!string.IsNullOrEmpty(username)) {
-                                        _usernameCache.TryAdd(pageId, username);
+                                        finalLink = realLink.Replace(pageId, username);
+                                        typeResult += " + User";
                                     }
                                 }
-
-                                // 4. Thay thế vào Link
-                                if (!string.IsNullOrEmpty(username)) {
-                                    finalLink = realLink.Replace(pageId, username);
-                                    typeResult += " + User";
-                                }
                             }
-                            // --------------------------------------------------------
+                            isSuccess = true;
+                        } catch {
+                            status = "Lỗi JSON";
+                            isSuccess = true;
                         }
-
-                    } catch { status = "Lỗi JSON"; }
-                } else {
-                    status = "DIE"; typeResult = "Die Token/Xóa"; rowColor = Color.Salmon;
-                    Interlocked.Increment(ref _countDie);
+                    } else {
+                        status = "DIE"; typeResult = "Die Thực/Xóa"; rowColor = Color.Salmon;
+                        Interlocked.Increment(ref _countDie);
+                        isSuccess = true;
+                    }
                 }
             }
 
@@ -461,7 +524,7 @@ namespace ToolCheckCmt {
                 Status = status,
                 Type = typeResult,
                 Date = dateStr,
-                Link = finalLink, // Link này đã qua xử lý (ID -> Username nếu có thể)
+                Link = finalLink,
                 Color = rowColor
             };
 
@@ -469,24 +532,10 @@ namespace ToolCheckCmt {
             _queueResult.Enqueue(resultItem);
         }
 
-        // --- HÀM MỚI: LẤY USERNAME TỪ API (PORT TỪ TOOL 2 SANG) ---
-        private async Task<string> GetUsernameFromApi(string pageId, string token) {
-            try {
-                string apiUrl = $"https://graph.facebook.com/{pageId}?fields=username&access_token={token}";
-                string jsonString = await GetApiContent(apiUrl);
-                if (!string.IsNullOrEmpty(jsonString)) {
-                    JObject json = JObject.Parse(jsonString);
-                    if (json["username"] != null) {
-                        return json["username"].ToString();
-                    }
-                }
-            } catch { }
-            return null; // Trả về null nếu lỗi hoặc không có username
-        }
-
-        // --- HÀM MỚI: TÁCH PAGE ID TỪ LINK CHUẨN ---
+        // ==========================================
+        // CÁC HÀM TIỆN ÍCH CHUNG
+        // ==========================================
         private string ExtractPageIdFromLink(string url) {
-            // Regex bắt dạng: facebook.com/123456789/
             var match = Regex.Match(url, @"facebook\.com\/(\d+)");
             if (match.Success) return match.Groups[1].Value;
             return null;
@@ -525,11 +574,6 @@ namespace ToolCheckCmt {
             return "";
         }
 
-        private string CleanFacebookLink(string originalUrl) {
-            // Hàm này vẫn giữ để dùng cho nút Export nếu cần
-            return originalUrl;
-        }
-
         private void btnExport_Click(object sender, EventArgs e) {
             if (_fullResults.IsEmpty) { MessageBox.Show("Không có dữ liệu!"); return; }
 
@@ -545,11 +589,9 @@ namespace ToolCheckCmt {
                         ws.Cells[1, 1].Value = "Link";
 
                         int r = 2;
-                        // Chỉ xuất những con LIVE
                         var exportList = _fullResults.Where(x => x.Status == "LIVE").OrderBy(x => x.STT).ToList();
 
                         foreach (var item in exportList) {
-                            // item.Link bây giờ đã là Link Username (nếu convert thành công) hoặc Link ID
                             ws.Cells[r, 1].Value = item.Link;
                             r++;
                         }
