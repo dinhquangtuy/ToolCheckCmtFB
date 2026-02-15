@@ -122,6 +122,12 @@ namespace ToolCheckCmt {
                                 rowColor = Color.LightGreen;
 
                                 string pageId = FacebookParser.ExtractPageIdFromLink(realLink);
+
+                                // Bổ sung sẵn đuôi comment_id vào realLink trước khi xử lý
+                                if (!realLink.Contains("comment_id=") && !string.IsNullOrEmpty(cmtId)) {
+                                    realLink += (realLink.Contains("?") ? "&" : "?") + "comment_id=" + cmtId;
+                                }
+
                                 if (!string.IsNullOrEmpty(pageId)) {
                                     string username = "";
                                     if (usernameCache.ContainsKey(pageId)) {
@@ -146,10 +152,18 @@ namespace ToolCheckCmt {
                                         }
                                     }
 
+                                    // QUAN TRỌNG NHẤT LÀ ĐOẠN NÀY:
                                     if (!string.IsNullOrEmpty(username)) {
+                                        // NẾU CÓ USERNAME: Giữ link dạng Username
                                         finalLink = realLink.Replace(pageId, username);
                                         typeResult += " + User";
+                                    } else {
+                                        // NẾU CHỈ LÀ ID SỐ: Ép sang dạng Permalink.php
+                                        finalLink = FacebookParser.ConvertToPermalink(realLink);
                                     }
+                                } else {
+                                    // Trường hợp realLink trả về bản chất đã là Username sẵn
+                                    finalLink = realLink;
                                 }
                             }
                             isSuccess = true;
