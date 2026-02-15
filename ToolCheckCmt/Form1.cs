@@ -1,95 +1,55 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using OfficeOpenXml;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace ToolCheckCmt {
     public partial class Form1 : Form {
-        // --- CẤU HÌNH ---
-        private static readonly HttpClient client = CreateHttpClient();
-        private SemaphoreSlim _semaphore = new SemaphoreSlim(30);
+        // --- CÁC CLASS CỘNG TÁC ---
+        private readonly TokenManager _tokenManager = new TokenManager();
+        private readonly FacebookApiService _apiService = new FacebookApiService();
+        private SemaphoreSlim _semaphore = new SemaphoreSlim(25);
 
-        // --- QUẢN LÝ DỮ LIỆU ---
+        // --- QUẢN LÝ DỮ LIỆU & UI ---
         private int _countLive = 0;
         private int _countDie = 0;
         private int _totalProcessed = 0;
 
-        private List<string> _listTokens = new List<string>();
-        private int _currentTokenIndex = 0;
-        private object _tokenLock = new object();
-
         private ConcurrentQueue<ResultModel> _queueResult = new ConcurrentQueue<ResultModel>();
         private ConcurrentBag<ResultModel> _fullResults = new ConcurrentBag<ResultModel>();
-        // Bộ nhớ đệm: Lưu cặp ID -> Username để không phải request lại
         private ConcurrentDictionary<string, string> _usernameCache = new ConcurrentDictionary<string, string>();
+
         private System.Windows.Forms.Timer _uiTimer;
-        private const string SETTINGS_FILE = "last_session.json";
-
-        // Class Model
-        private class ResultModel {
-            public int STT { get; set; }
-            public string ID { get; set; }
-            public string Status { get; set; }
-            public string Type { get; set; }
-            public string Date { get; set; }
-            public string Link { get; set; }
-            public Color Color { get; set; }
-        }
-
-        public class AppSettings {
-            public string LastTokens { get; set; }
-            public string LastLinks { get; set; }
-        }
-
-        private static HttpClient CreateHttpClient() {
-            var handler = new HttpClientHandler();
-            if (handler.SupportsAutomaticDecompression) {
-                handler.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-            }
-            handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
-
-            var c = new HttpClient(handler);
-            c.Timeout = TimeSpan.FromSeconds(20);
-            c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-            return c;
-        }
 
         public Form1() {
             InitializeComponent();
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            ServicePointManager.DefaultConnectionLimit = 2000;
-            ServicePointManager.Expect100Continue = false;
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12;
+            System.Net.ServicePointManager.DefaultConnectionLimit = 2000;
 
             SetupDataGridView();
             SetupTimer();
+            ApplyUI_And_Layout();
+
+            AppConfigManager.AutoCreateShortcut();
 
             txtLinks.AllowDrop = true;
             txtLinks.DragEnter += txtLinks_DragEnter;
             txtLinks.DragDrop += txtLinks_DragDrop;
 
-            ApplyUI_And_Layout();
-            AutoCreateShortcut();
-
             this.FormClosing += Form1_FormClosing;
-            LoadSettings();
+
+            var settings = AppConfigManager.LoadSettings();
+            if (settings != null) {
+                rtbTokens.Text = settings.LastTokens;
+                txtLinks.Text = settings.LastLinks;
+            }
         }
 
-        // ==========================================
-        // KHU VỰC GIAO DIỆN & SETTINGS
-        // ==========================================
         private void ApplyUI_And_Layout() {
             this.BackColor = Color.FromArgb(245, 247, 251);
             this.Font = new Font("Segoe UI", 10F, FontStyle.Regular);
@@ -152,6 +112,27 @@ namespace ToolCheckCmt {
             btn.Size = new Size(120, 45);
         }
 
+        private void SetupDataGridView() {
+            dgvResult.Columns.Clear();
+            dgvResult.Columns.Add("colSTT", "STT");
+            dgvResult.Columns.Add("colID", "Comment ID");
+            dgvResult.Columns.Add("colStatus", "Trạng Thái");
+            dgvResult.Columns.Add("colType", "Chi Tiết");
+            dgvResult.Columns.Add("colDate", "Ngày");
+            dgvResult.Columns.Add("colLink", "Link Cuối Cùng");
+
+            dgvResult.Columns["colSTT"].Width = 50;
+            dgvResult.Columns["colID"].Width = 120;
+            dgvResult.Columns["colStatus"].Width = 100;
+            dgvResult.Columns["colType"].Width = 100;
+            dgvResult.Columns["colDate"].Width = 120;
+            dgvResult.Columns["colLink"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+
+            typeof(DataGridView).InvokeMember("DoubleBuffered",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.SetProperty,
+                null, dgvResult, new object[] { true });
+        }
+
         private void txtLinks_DragEnter(object sender, DragEventArgs e) {
             if (e.Data.GetDataPresent(DataFormats.FileDrop)) {
                 string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
@@ -175,22 +156,11 @@ namespace ToolCheckCmt {
             try {
                 if (ext == ".txt") {
                     loadedLinks = File.ReadAllLines(filePath)
-                   .Where(line => !string.IsNullOrWhiteSpace(line))
-                   .Select(line => line.Trim())
-                   .ToList();
+                                      .Where(line => !string.IsNullOrWhiteSpace(line))
+                                      .Select(line => line.Trim())
+                                      .ToList();
                 } else if (ext == ".xlsx") {
-                    using (var package = new ExcelPackage(new FileInfo(filePath))) {
-                        var worksheet = package.Workbook.Worksheets.FirstOrDefault();
-                        if (worksheet != null && worksheet.Dimension != null) {
-                            int rowCount = worksheet.Dimension.Rows;
-                            for (int row = 1; row <= rowCount; row++) {
-                                string cellValue = worksheet.Cells[row, 1].Text;
-                                if (!string.IsNullOrWhiteSpace(cellValue)) {
-                                    loadedLinks.Add(cellValue.Trim());
-                                }
-                            }
-                        }
-                    }
+                    loadedLinks = ExcelHelper.ReadLinksFromExcel(filePath);
                 }
 
                 if (loadedLinks.Count > 0) {
@@ -203,30 +173,8 @@ namespace ToolCheckCmt {
         }
 
         private void SetupTimer() {
-            _uiTimer = new System.Windows.Forms.Timer();
-            _uiTimer.Interval = 500;
+            _uiTimer = new System.Windows.Forms.Timer { Interval = 500 };
             _uiTimer.Tick += _uiTimer_Tick;
-        }
-
-        private void SetupDataGridView() {
-            dgvResult.Columns.Clear();
-            dgvResult.Columns.Add("colSTT", "STT");
-            dgvResult.Columns.Add("colID", "Comment ID");
-            dgvResult.Columns.Add("colStatus", "Trạng Thái");
-            dgvResult.Columns.Add("colType", "Chi Tiết");
-            dgvResult.Columns.Add("colDate", "Ngày");
-            dgvResult.Columns.Add("colLink", "Link Cuối Cùng");
-
-            dgvResult.Columns["colSTT"].Width = 50;
-            dgvResult.Columns["colID"].Width = 120;
-            dgvResult.Columns["colStatus"].Width = 100;
-            dgvResult.Columns["colType"].Width = 100;
-            dgvResult.Columns["colDate"].Width = 120;
-            dgvResult.Columns["colLink"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-
-            typeof(DataGridView).InvokeMember("DoubleBuffered",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.SetProperty,
-                null, dgvResult, new object[] { true });
         }
 
         private void _uiTimer_Tick(object sender, EventArgs e) {
@@ -256,93 +204,19 @@ namespace ToolCheckCmt {
                 lblDie.Text = $"Die: {_countDie}";
                 lblStatus.Text = $"Đang chạy: {_totalProcessed}";
 
-                if (dgvResult.RowCount > 0)
-                    dgvResult.FirstDisplayedScrollingRowIndex = dgvResult.RowCount - 1;
+                if (dgvResult.RowCount > 0) dgvResult.FirstDisplayedScrollingRowIndex = dgvResult.RowCount - 1;
             }
         }
 
-        private void Form1_FormClosing(object sender, FormClosingEventArgs e) {
-            SaveSettings();
-        }
-
-        private void SaveSettings() {
-            try {
-                var settings = new AppSettings {
-                    LastTokens = rtbTokens.Text,
-                    LastLinks = txtLinks.Text
-                };
-                string json = JsonConvert.SerializeObject(settings, Formatting.Indented);
-                File.WriteAllText(SETTINGS_FILE, json);
-            } catch { }
-        }
-
-        private void LoadSettings() {
-            try {
-                if (File.Exists(SETTINGS_FILE)) {
-                    string json = File.ReadAllText(SETTINGS_FILE);
-                    var settings = JsonConvert.DeserializeObject<AppSettings>(json);
-                    if (settings != null) {
-                        rtbTokens.Text = settings.LastTokens;
-                        txtLinks.Text = settings.LastLinks;
-                    }
-                }
-            } catch { }
-        }
-
-        // ==========================================
-        // KHU VỰC QUẢN LÝ TOKEN
-        // ==========================================
-        private string GetNextToken() {
-            lock (_tokenLock) {
-                if (_listTokens.Count == 0) return "";
-                string token = _listTokens[_currentTokenIndex];
-                _currentTokenIndex++;
-                if (_currentTokenIndex >= _listTokens.Count) _currentTokenIndex = 0;
-                return token;
-            }
-        }
-
-        private void RemoveDeadToken(string token) {
-            lock (_tokenLock) {
-                if (_listTokens.Contains(token)) {
-                    _listTokens.Remove(token);
-                    if (_listTokens.Count > 0 && _currentTokenIndex >= _listTokens.Count) {
-                        _currentTokenIndex = 0;
-                    }
-                }
-            }
-        }
-
-        private bool IsTokenError(string jsonResponse) {
-            if (string.IsNullOrEmpty(jsonResponse)) return false;
-            if (!jsonResponse.Contains("\"error\"")) return false;
-
-            try {
-                JObject json = JObject.Parse(jsonResponse);
-                if (json["error"] != null) {
-                    int code = (int?)json["error"]["code"] ?? 0;
-                    // 190: Token die/hết hạn | 4, 17, 32, 613: Rate Limit
-                    if (code == 190 || code == 4 || code == 17 || code == 32 || code == 613) {
-                        return true;
-                    }
-                }
-            } catch { }
-            return false;
-        }
-
-        // ==========================================
-        // KHU VỰC XỬ LÝ CHÍNH
-        // ==========================================
         private async void btnCheck_Click(object sender, EventArgs e) {
-            var lines = rtbTokens.Lines.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToList();
-            _listTokens = lines.Where(x => x.Length > 10).Distinct().ToList();
+            var lines = rtbTokens.Lines.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim());
+            _tokenManager.LoadTokens(lines);
 
-            var listLinks = txtLinks.Lines.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            var listLinks = txtLinks.Lines.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToList();
             if (listLinks.Count == 0) { MessageBox.Show("Chưa nhập Link!"); return; }
-            if (_listTokens.Count == 0) { MessageBox.Show("Chưa nhập Token!"); return; }
+            if (_tokenManager.GetAliveCount() == 0) { MessageBox.Show("Chưa nhập Token!"); return; }
 
             _countLive = 0; _countDie = 0; _totalProcessed = 0;
-            _currentTokenIndex = 0;
             dgvResult.Rows.Clear();
             while (_queueResult.TryDequeue(out _)) { }
             _fullResults = new ConcurrentBag<ResultModel>();
@@ -360,7 +234,14 @@ namespace ToolCheckCmt {
 
                 tasks.Add(Task.Run(async () => {
                     try {
-                        await ProcessLinkWithToken(url.Trim(), currentSTT);
+                        var result = await _apiService.ProcessSingleLinkAsync(url, currentSTT, _tokenManager, _usernameCache);
+
+                        Interlocked.Increment(ref _totalProcessed);
+                        if (result.Status == "LIVE") Interlocked.Increment(ref _countLive);
+                        else if (result.Status == "DIE" || result.Status.Contains("Lỗi")) Interlocked.Increment(ref _countDie);
+
+                        _fullResults.Add(result);
+                        _queueResult.Enqueue(result);
                     } finally {
                         _semaphore.Release();
                     }
@@ -372,206 +253,11 @@ namespace ToolCheckCmt {
             _uiTimer.Stop();
             _uiTimer_Tick(null, null);
 
-            MessageBox.Show($"Hoàn tất!\nLive: {_countLive} - Die: {_countDie}\nCòn lại {_listTokens.Count} Token sống.", "Thông báo");
-
-            // Tự cập nhật lại danh sách token sống vào giao diện
-            rtbTokens.Text = string.Join(Environment.NewLine, _listTokens);
+            rtbTokens.Text = string.Join(Environment.NewLine, _tokenManager.GetAllAliveTokens());
+            MessageBox.Show($"Hoàn tất!\nLive: {_countLive} - Die: {_countDie}\nCòn lại {_tokenManager.GetAliveCount()} Token sống.", "Thông báo");
 
             btnCheck.Enabled = true;
             btnExport.Enabled = true;
-        }
-
-        private async Task ProcessLinkWithToken(string url, int stt) {
-            string cmtId = ExtractCommentId(url);
-            string status = "ERROR";
-            string typeResult = "";
-            string dateStr = "N/A";
-            Color rowColor = Color.White;
-            string finalLink = url;
-
-            if (string.IsNullOrEmpty(cmtId)) {
-                status = "Lỗi ID";
-            } else {
-                bool isSuccess = false;
-
-                // Vòng lặp xoay Token: Nếu token lỗi, tự vứt token cũ đi, bốc token mới và lặp lại link này
-                while (!isSuccess) {
-                    string currentToken = GetNextToken();
-                    if (string.IsNullOrEmpty(currentToken)) {
-                        status = "HẾT TOKEN";
-                        typeResult = "All Tokens Dead";
-                        rowColor = Color.Red;
-                        break;
-                    }
-
-                    string apiUrl = $"https://graph.facebook.com/v18.0/{cmtId}?fields=id,permalink_url,created_time,is_hidden,object{{created_time,id}},parent{{created_time,id}}&access_token={currentToken}";
-                    string jsonResponse = await GetApiContent(apiUrl);
-
-                    // XỬ LÝ NẾU TOKEN DIE / RATE LIMIT
-                    if (IsTokenError(jsonResponse)) {
-                        RemoveDeadToken(currentToken);
-                        continue;
-                    }
-
-                    if (jsonResponse.Contains("\"id\":")) {
-                        try {
-                            JObject json = JObject.Parse(jsonResponse);
-                            string realLink = (string)json["permalink_url"] ?? "";
-                            finalLink = realLink;
-
-                            bool isHidden = (bool?)json["is_hidden"] ?? false;
-                            DateTime? cmtDate = (DateTime?)json["created_time"];
-                            DateTime? postDate = null;
-
-                            if (json["object"] != null && json["object"]["created_time"] != null) {
-                                postDate = (DateTime?)json["object"]["created_time"];
-                            }
-                            if (postDate == null && json["parent"] != null && json["parent"]["created_time"] != null) {
-                                postDate = (DateTime?)json["parent"]["created_time"];
-                            }
-
-                            if (postDate == null) {
-                                string postId = "";
-                                if (json["object"] != null && json["object"]["id"] != null) postId = json["object"]["id"].ToString();
-                                if (string.IsNullOrEmpty(postId) && !string.IsNullOrEmpty(realLink)) postId = ExtractPostIdFromLink(realLink);
-
-                                if (!string.IsNullOrEmpty(postId)) {
-                                    string postApiUrl = $"https://graph.facebook.com/v18.0/{postId}?fields=created_time&access_token={currentToken}";
-                                    string postJson = await GetApiContent(postApiUrl);
-
-                                    if (IsTokenError(postJson)) {
-                                        RemoveDeadToken(currentToken);
-                                        continue;
-                                    }
-
-                                    try {
-                                        JObject pJson = JObject.Parse(postJson);
-                                        if (pJson["created_time"] != null) postDate = (DateTime?)pJson["created_time"];
-                                    } catch { }
-                                }
-                            }
-
-                            DateTime? targetDate = postDate ?? cmtDate;
-                            dateStr = targetDate.HasValue ? targetDate.Value.ToString("dd/MM/yyyy") : "N/A";
-                            double daysDiff = targetDate.HasValue ? (DateTime.Now - targetDate.Value).TotalDays : 9999;
-
-                            if (isHidden) {
-                                status = "DIE"; typeResult = "Bị Ẩn"; rowColor = Color.Salmon;
-                                Interlocked.Increment(ref _countDie);
-                            } else if (realLink.Contains("/reel/")) {
-                                status = "DIE"; typeResult = "Reel"; rowColor = Color.Salmon;
-                                Interlocked.Increment(ref _countDie);
-                            } else if (daysDiff > 27) {
-                                status = "DIE"; typeResult = "Bài Cũ"; rowColor = Color.Salmon;
-                                Interlocked.Increment(ref _countDie);
-                            } else {
-                                status = "LIVE";
-                                typeResult = postDate != null ? "OK (Post)" : "OK (Cmt)";
-                                rowColor = Color.LightGreen;
-                                Interlocked.Increment(ref _countLive);
-
-                                string pageId = ExtractPageIdFromLink(realLink);
-                                if (!string.IsNullOrEmpty(pageId)) {
-                                    string username = "";
-
-                                    if (_usernameCache.ContainsKey(pageId)) {
-                                        username = _usernameCache[pageId];
-                                    } else {
-                                        string userApiUrl = $"https://graph.facebook.com/{pageId}?fields=username&access_token={currentToken}";
-                                        string userJson = await GetApiContent(userApiUrl);
-
-                                        if (IsTokenError(userJson)) {
-                                            RemoveDeadToken(currentToken);
-                                            Interlocked.Decrement(ref _countLive);
-                                            continue;
-                                        }
-
-                                        if (!string.IsNullOrEmpty(userJson)) {
-                                            try {
-                                                JObject uJson = JObject.Parse(userJson);
-                                                if (uJson["username"] != null) {
-                                                    username = uJson["username"].ToString();
-                                                    _usernameCache.TryAdd(pageId, username);
-                                                }
-                                            } catch { }
-                                        }
-                                    }
-
-                                    if (!string.IsNullOrEmpty(username)) {
-                                        finalLink = realLink.Replace(pageId, username);
-                                        typeResult += " + User";
-                                    }
-                                }
-                            }
-                            isSuccess = true;
-                        } catch {
-                            status = "Lỗi JSON";
-                            isSuccess = true;
-                        }
-                    } else {
-                        status = "DIE"; typeResult = "Die Thực/Xóa"; rowColor = Color.Salmon;
-                        Interlocked.Increment(ref _countDie);
-                        isSuccess = true;
-                    }
-                }
-            }
-
-            Interlocked.Increment(ref _totalProcessed);
-
-            var resultItem = new ResultModel {
-                STT = stt,
-                ID = cmtId,
-                Status = status,
-                Type = typeResult,
-                Date = dateStr,
-                Link = finalLink,
-                Color = rowColor
-            };
-
-            _fullResults.Add(resultItem);
-            _queueResult.Enqueue(resultItem);
-        }
-
-        // ==========================================
-        // CÁC HÀM TIỆN ÍCH CHUNG
-        // ==========================================
-        private string ExtractPageIdFromLink(string url) {
-            var match = Regex.Match(url, @"facebook\.com\/(\d+)");
-            if (match.Success) return match.Groups[1].Value;
-            return null;
-        }
-
-        private async Task<string> GetApiContent(string apiUrl) {
-            try {
-                using (var response = await client.GetAsync(apiUrl)) {
-                    return await response.Content.ReadAsStringAsync();
-                }
-            } catch { return ""; }
-        }
-
-        private string ExtractCommentId(string url) {
-            var match = Regex.Match(url, @"comment_id=(\d+)");
-            if (match.Success) return match.Groups[1].Value;
-            var match2 = Regex.Match(url, @"reply_comment_id=(\d+)");
-            if (match2.Success) return match2.Groups[1].Value;
-            if (Regex.IsMatch(url, @"^\d+$")) return url;
-            return "";
-        }
-
-        private string ExtractPostIdFromLink(string url) {
-            try {
-                var matchFbid = Regex.Match(url, @"story_fbid=([0-9]+)");
-                if (matchFbid.Success) return matchFbid.Groups[1].Value;
-                var matchPost = Regex.Match(url, @"\/posts\/([0-9]+)");
-                if (matchPost.Success) return matchPost.Groups[1].Value;
-                var matchVideo = Regex.Match(url, @"\/videos\/([0-9]+)");
-                if (matchVideo.Success) return matchVideo.Groups[1].Value;
-                var matchPhoto = Regex.Match(url, @"\/photos\/[a-zA-Z0-9\.]+\/([0-9]+)");
-                if (matchPhoto.Success) return matchPhoto.Groups[1].Value;
-                var matchEnd = Regex.Match(url, @"\/([0-9]+)\/?(?:\?|$)");
-                if (matchEnd.Success && matchEnd.Groups[1].Value.Length > 10) return matchEnd.Groups[1].Value;
-            } catch { }
-            return "";
         }
 
         private void btnExport_Click(object sender, EventArgs e) {
@@ -583,58 +269,17 @@ namespace ToolCheckCmt {
 
             if (sfd.ShowDialog() == DialogResult.OK) {
                 try {
-                    if (File.Exists(sfd.FileName)) File.Delete(sfd.FileName);
-                    using (var p = new ExcelPackage(new FileInfo(sfd.FileName))) {
-                        var ws = p.Workbook.Worksheets.Add("Data");
-                        ws.Cells[1, 1].Value = "Link";
-
-                        int r = 2;
-                        var exportList = _fullResults.Where(x => x.Status == "LIVE").OrderBy(x => x.STT).ToList();
-
-                        foreach (var item in exportList) {
-                            ws.Cells[r, 1].Value = item.Link;
-                            r++;
-                        }
-                        ws.Column(1).Width = 50;
-                        p.Save();
-                    }
+                    var exportList = _fullResults.Where(x => x.Status == "LIVE").OrderBy(x => x.STT).ToList();
+                    ExcelHelper.ExportToExcel(exportList, sfd.FileName);
                     System.Diagnostics.Process.Start(sfd.FileName);
-                } catch (Exception ex) { MessageBox.Show("Lỗi: " + ex.Message); }
+                } catch (Exception ex) {
+                    MessageBox.Show(ex.Message);
+                }
             }
         }
 
-        private void AutoCreateShortcut() {
-            try {
-                string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                string shortcutName = "RefineMeta.lnk";
-                string shortcutPath = Path.Combine(desktopPath, shortcutName);
-                string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
-
-                if (!System.IO.File.Exists(shortcutPath)) {
-                    Type shellType = Type.GetTypeFromProgID("WScript.Shell");
-                    dynamic shell = Activator.CreateInstance(shellType);
-                    dynamic shortcut = shell.CreateShortcut(shortcutPath);
-                    shortcut.TargetPath = exePath;
-                    shortcut.WorkingDirectory = Path.GetDirectoryName(exePath);
-                    shortcut.WindowStyle = 1;
-                    shortcut.Description = "Tool Check Live + Username";
-                    shortcut.IconLocation = exePath + ",0";
-                    shortcut.Save();
-                }
-            } catch { }
-        }
-    }
-
-    public class RoundedButton : Button {
-        protected override void OnPaint(PaintEventArgs e) {
-            base.OnPaint(e);
-            Rectangle Rect = new Rectangle(0, 0, this.Width, this.Height);
-            GraphicsPath GraphPath = new GraphicsPath();
-            GraphPath.AddArc(Rect.X, Rect.Y, 15, 15, 180, 90);
-            GraphPath.AddArc(Rect.X + Rect.Width - 15, Rect.Y, 15, 15, 270, 90);
-            GraphPath.AddArc(Rect.X + Rect.Width - 15, Rect.Y + Rect.Height - 15, 15, 15, 0, 90);
-            GraphPath.AddArc(Rect.X, Rect.Y + Rect.Height - 15, 15, 15, 90, 90);
-            this.Region = new Region(GraphPath);
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e) {
+            AppConfigManager.SaveSettings(rtbTokens.Text, txtLinks.Text);
         }
     }
 }
