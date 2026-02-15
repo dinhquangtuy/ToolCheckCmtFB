@@ -56,5 +56,25 @@ namespace ToolCheckCmt {
             // Nếu thiếu ID, trả về link gốc
             return url;
         }
+        // Hàm mới: Trích xuất định danh (Username hoặc ID) để làm khóa sắp xếp
+        public static string GetSortingKey(string url) {
+            if (string.IsNullOrEmpty(url)) return "";
+
+            // 1. Nếu là dạng permalink có chứa tham số id=
+            var matchId = Regex.Match(url, @"[?&]id=(\d+)");
+            if (matchId.Success) return matchId.Groups[1].Value;
+
+            // 2. Nếu là dạng link chứa username hoặc ID ngay sau facebook.com/
+            var matchUser = Regex.Match(url, @"facebook\.com\/([^\/\?]+)");
+            if (matchUser.Success) {
+                string val = matchUser.Groups[1].Value;
+                // Bỏ qua nếu nó bắt nhầm vào chữ permalink.php hoặc story.php
+                if (val != "permalink.php" && val != "story.php" && val != "groups") {
+                    return val.ToLower(); // Chuyển về chữ thường để sắp xếp chuẩn A-Z
+                }
+            }
+
+            return url; // Nếu không bóc được gì thì trả về nguyên link
+        }
     }
 }

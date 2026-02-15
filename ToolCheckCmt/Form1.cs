@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -264,16 +265,50 @@ namespace ToolCheckCmt {
             if (_fullResults.IsEmpty) { MessageBox.Show("Không có dữ liệu!"); return; }
 
             SaveFileDialog sfd = new SaveFileDialog();
-            sfd.FileName = $"ket_qua_live_{DateTime.Now:HHmm}.xlsx";
+            sfd.FileName = $"ket_qua_comment.xlsx";
             sfd.Filter = "Excel (*.xlsx)|*.xlsx";
 
             if (sfd.ShowDialog() == DialogResult.OK) {
                 try {
-                    var exportList = _fullResults.Where(x => x.Status == "LIVE").OrderBy(x => x.STT).ToList();
+                    // 1. Nhóm toàn bộ kết quả LIVE theo Page (sử dụng SortingKey làm khóa nhóm)
+                    var groupedData = _fullResults
+                        .Where(x => x.Status == "LIVE")
+                        .GroupBy(x => FacebookParser.GetSortingKey(x.Link))
+                        .ToList();
+
+                    // 2. Phân tách thành 2 danh sách cụm Page (Username và ID số)
+                    var userGroups = groupedData
+                        .Where(g => !Regex.IsMatch(g.Key, @"^\d+$"))
+                        .OrderBy(g => g.Key)
+                        .ToList();
+
+                    var idGroups = groupedData
+                        .Where(g => Regex.IsMatch(g.Key, @"^\d+$"))
+                        .OrderBy(g => g.Key)
+                        .ToList();
+
+                    // 3. Thuật toán trộn cụm: 4 cụm Page Username - 2 cụm Page ID
+                    List<ResultModel> exportList = new List<ResultModel>();
+                    int userGrpIdx = 0;
+                    int idGrpIdx = 0;
+
+                    while (userGrpIdx < userGroups.Count || idGrpIdx < idGroups.Count) {
+                        // Lấy 4 cụm Page Username (bao gồm tất cả bài đăng trong từng cụm)
+                        for (int i = 0; i < 4 && userGrpIdx < userGroups.Count; i++) {
+                            exportList.AddRange(userGroups[userGrpIdx++].OrderBy(x => x.STT));
+                        }
+
+                        // Lấy 2 cụm Page ID số (bao gồm tất cả bài đăng trong từng cụm)
+                        for (int i = 0; i < 2 && idGrpIdx < idGroups.Count; i++) {
+                            exportList.AddRange(idGroups[idGrpIdx++].OrderBy(x => x.STT));
+                        }
+                    }
+
+                    // 4. Xuất file thông qua Helper
                     ExcelHelper.ExportToExcel(exportList, sfd.FileName);
                     System.Diagnostics.Process.Start(sfd.FileName);
                 } catch (Exception ex) {
-                    MessageBox.Show(ex.Message);
+                    MessageBox.Show("Lỗi xuất file: " + ex.Message);
                 }
             }
         }
