@@ -270,41 +270,48 @@ namespace ToolCheckCmt {
 
             if (sfd.ShowDialog() == DialogResult.OK) {
                 try {
-                    // 1. Nhóm toàn bộ kết quả LIVE theo Page (sử dụng SortingKey làm khóa nhóm)
+                    Random rnd = new Random();
+
+                    // 1. Nhóm toàn bộ kết quả LIVE theo Page (Giữ nguyên cục, KHÔNG băm nhỏ)
                     var groupedData = _fullResults
                         .Where(x => x.Status == "LIVE")
                         .GroupBy(x => FacebookParser.GetSortingKey(x.Link))
                         .ToList();
 
-                    // 2. Phân tách thành 2 danh sách cụm Page (Username và ID số)
+                    // 2. Phân tách và TRÁO ĐỔI NGẪU NHIÊN thứ tự các Fanpage 
+                    // (Đánh lừa thị giác để không bị lộ quy luật xếp A-Z)
                     var userGroups = groupedData
                         .Where(g => !Regex.IsMatch(g.Key, @"^\d+$"))
-                        .OrderBy(g => g.Key)
+                        .OrderBy(g => Guid.NewGuid())
                         .ToList();
 
                     var idGroups = groupedData
                         .Where(g => Regex.IsMatch(g.Key, @"^\d+$"))
-                        .OrderBy(g => g.Key)
+                        .OrderBy(g => Guid.NewGuid())
                         .ToList();
 
-                    // 3. Thuật toán trộn cụm: 4 cụm Page Username - 2 cụm Page ID
+                    // 3. Thuật toán trộn cụm ngẫu nhiên
                     List<ResultModel> exportList = new List<ResultModel>();
                     int userGrpIdx = 0;
                     int idGrpIdx = 0;
 
                     while (userGrpIdx < userGroups.Count || idGrpIdx < idGroups.Count) {
-                        // Lấy 4 cụm Page Username (bao gồm tất cả bài đăng trong từng cụm)
-                        for (int i = 0; i < 4 && userGrpIdx < userGroups.Count; i++) {
+
+                        // Đổ xúc xắc: Lần này bốc mấy Page Username? (Ngẫu nhiên từ 2 đến 4 Page)
+                        int randomUserCount = rnd.Next(2, 5);
+                        for (int i = 0; i < randomUserCount && userGrpIdx < userGroups.Count; i++) {
+                            // Nhặt TOÀN BỘ comment của Page này ném vào danh sách
                             exportList.AddRange(userGroups[userGrpIdx++].OrderBy(x => x.STT));
                         }
 
-                        // Lấy 2 cụm Page ID số (bao gồm tất cả bài đăng trong từng cụm)
-                        for (int i = 0; i < 2 && idGrpIdx < idGroups.Count; i++) {
+                        // Đổ xúc xắc: Lần này bốc mấy Page ID số? (Ngẫu nhiên từ 1 đến 2 Page)
+                        int randomIdCount = rnd.Next(1, 3);
+                        for (int i = 0; i < randomIdCount && idGrpIdx < idGroups.Count; i++) {
                             exportList.AddRange(idGroups[idGrpIdx++].OrderBy(x => x.STT));
                         }
                     }
 
-                    // 4. Xuất file thông qua Helper
+                    // 4. Xuất file
                     ExcelHelper.ExportToExcel(exportList, sfd.FileName);
                     System.Diagnostics.Process.Start(sfd.FileName);
                 } catch (Exception ex) {
