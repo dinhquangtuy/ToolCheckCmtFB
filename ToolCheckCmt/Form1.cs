@@ -14,7 +14,7 @@ namespace ToolCheckCmt {
         // --- CÁC CLASS CỘNG TÁC ---
         private readonly TokenManager _tokenManager = new TokenManager();
         private readonly FacebookApiService _apiService = new FacebookApiService();
-        private SemaphoreSlim _semaphore = new SemaphoreSlim(25);
+        private SemaphoreSlim _semaphore = new SemaphoreSlim(10);
 
         // --- QUẢN LÝ DỮ LIỆU & UI ---
         private int _countLive = 0;

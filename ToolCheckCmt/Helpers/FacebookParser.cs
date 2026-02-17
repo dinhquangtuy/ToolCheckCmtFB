@@ -2,12 +2,19 @@
 
 namespace ToolCheckCmt {
     public static class FacebookParser {
+
+        // 1. Bóc Page ID (Đã fix lỗi bắt id= trong permalink)
         public static string ExtractPageIdFromLink(string url) {
             var match = Regex.Match(url, @"facebook\.com\/(\d+)");
             if (match.Success) return match.Groups[1].Value;
+
+            var matchIdParam = Regex.Match(url, @"[?&]id=(\d+)");
+            if (matchIdParam.Success) return matchIdParam.Groups[1].Value;
+
             return null;
         }
 
+        // 2. Bóc Comment ID
         public static string ExtractCommentId(string url) {
             var match = Regex.Match(url, @"comment_id=(\d+)");
             if (match.Success) return match.Groups[1].Value;
@@ -19,14 +26,12 @@ namespace ToolCheckCmt {
             return "";
         }
 
-        // 3. Bóc tách Post ID (Đã nâng cấp Regex cực mạnh để bắt mọi loại pfbid)
+        // 3. Bóc Post ID (Bắt mọi thể loại pfbid, posts, videos...)
         public static string ExtractPostIdFromLink(string url) {
             try {
-                // Bắt mọi ký tự sau story_fbid= cho đến khi gặp dấu & hoặc ?
                 var matchFbid = Regex.Match(url, @"story_fbid=([^&?]+)");
                 if (matchFbid.Success) return matchFbid.Groups[1].Value;
 
-                // Bắt mọi ký tự sau /posts/ cho đến khi gặp dấu / hoặc ?
                 var matchPost = Regex.Match(url, @"\/posts\/([^/?&]+)");
                 if (matchPost.Success) return matchPost.Groups[1].Value;
 
@@ -41,40 +46,42 @@ namespace ToolCheckCmt {
             } catch { }
             return "";
         }
-        public static string ConvertToPermalink(string url) {
+
+        // 4. Hàm ráp link SẠCH BONG (Không chứa tracking cft hay tn)
+        public static string ConvertToCleanPermalink(string url, string username = null) {
             string pageId = ExtractPageIdFromLink(url);
             string postId = ExtractPostIdFromLink(url);
             string commentId = ExtractCommentId(url);
 
-            // Kiểm tra bóc tách thành công
-            if (!string.IsNullOrEmpty(pageId) && !string.IsNullOrEmpty(postId) && !string.IsNullOrEmpty(commentId)) {
+            if (!string.IsNullOrEmpty(postId) && !string.IsNullOrEmpty(commentId)) {
 
-                // Đã sắp xếp lại đúng chuẩn: story_fbid -> id -> comment_id
-                return $"https://www.facebook.com/permalink.php?story_fbid={postId}&id={pageId}&comment_id={commentId}";
+                // TRƯỜNG HỢP 1: Có Username bằng chữ
+                if (!string.IsNullOrEmpty(username) && username != "NO_USER" && !Regex.IsMatch(username, @"^\d+$")) {
+                    return $"https://www.facebook.com/{username}/posts/{postId}?comment_id={commentId}";
+                }
+
+                // TRƯỜNG HỢP 2: Dạng Permalink ID số
+                if (!string.IsNullOrEmpty(pageId)) {
+                    return $"https://www.facebook.com/permalink.php?story_fbid={postId}&id={pageId}&comment_id={commentId}";
+                }
             }
-
-            // Nếu thiếu ID, trả về link gốc
             return url;
         }
-        // Hàm mới: Trích xuất định danh (Username hoặc ID) để làm khóa sắp xếp
+
+        // 5. Khóa sắp xếp ngẫu nhiên gom Page lúc xuất Excel
         public static string GetSortingKey(string url) {
             if (string.IsNullOrEmpty(url)) return "";
-
-            // 1. Nếu là dạng permalink có chứa tham số id=
             var matchId = Regex.Match(url, @"[?&]id=(\d+)");
             if (matchId.Success) return matchId.Groups[1].Value;
 
-            // 2. Nếu là dạng link chứa username hoặc ID ngay sau facebook.com/
             var matchUser = Regex.Match(url, @"facebook\.com\/([^\/\?]+)");
             if (matchUser.Success) {
                 string val = matchUser.Groups[1].Value;
-                // Bỏ qua nếu nó bắt nhầm vào chữ permalink.php hoặc story.php
                 if (val != "permalink.php" && val != "story.php" && val != "groups") {
-                    return val.ToLower(); // Chuyển về chữ thường để sắp xếp chuẩn A-Z
+                    return val.ToLower();
                 }
             }
-
-            return url; // Nếu không bóc được gì thì trả về nguyên link
+            return url;
         }
     }
 }
